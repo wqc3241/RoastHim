@@ -1,0 +1,8 @@
+{
+  "name": "RoastHim (骂他)",
+  "description": "A creative anonymous social platform to roast virtual avatars of annoying characters from daily life.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
