@@ -17,7 +17,7 @@ const NavBar: React.FC<Props> = ({ currentPage, onPageChange }) => {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-[#1A1A2E]/90 backdrop-blur-xl border-t border-white/10 px-6 py-3 pb-6 flex justify-between items-end z-50">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-slate-200 px-6 py-3 pb-6 flex justify-between items-end z-50">
       {navItems.map((item) => (
         <button
           key={item.id}
@@ -27,15 +27,15 @@ const NavBar: React.FC<Props> = ({ currentPage, onPageChange }) => {
           }`}
         >
           {item.special ? (
-            <div className="w-14 h-14 bg-orange-500 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(255,107,53,0.5)] border-4 border-[#1A1A2E]">
+            <div className="w-14 h-14 bg-orange-500 rounded-full flex items-center justify-center shadow-[0_10px_25px_rgba(255,107,53,0.35)] border-4 border-white">
               <span className="text-2xl text-white font-bold">+</span>
             </div>
           ) : (
             <>
-              <span className={`text-2xl mb-1 ${currentPage === item.id ? 'opacity-100' : 'opacity-40'}`}>
+              <span className={`text-2xl mb-1 ${currentPage === item.id ? 'opacity-100' : 'opacity-50'}`}>
                 {item.icon}
               </span>
-              <span className={`text-[10px] ${currentPage === item.id ? 'text-orange-500 font-bold' : 'text-gray-400'}`}>
+              <span className={`text-[10px] ${currentPage === item.id ? 'text-orange-600 font-bold' : 'text-slate-400'}`}>
                 {item.label}
               </span>
             </>

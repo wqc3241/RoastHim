@@ -63,4 +63,7 @@ export interface AppUser {
   avatar: string;
   badges: string[]; // ids
   stats: UserStats;
+  quote?: string;
+  level?: number;
+  email?: string;
 }
