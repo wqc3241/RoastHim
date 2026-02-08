@@ -10,6 +10,7 @@ import Profile from './pages/Profile';
 import Login from './pages/Login';
 import { supabase } from './supabaseClient';
 import Onboarding from './pages/Onboarding';
+import { Analytics } from '@vercel/analytics/react';
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>(Page.HOME);
@@ -266,6 +267,7 @@ const App: React.FC = () => {
           <Login />
         </div>
       )}
+      <Analytics />
     </div>
   );
 };
