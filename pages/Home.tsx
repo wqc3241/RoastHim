@@ -116,7 +116,7 @@ const Home: React.FC<Props> = ({ onSelectTarget, isAuthenticated = false }) => {
       </header>
 
       {/* Feed */}
-      <main className="px-4 py-4 columns-2 gap-4">
+      <main className="px-4 py-4 grid grid-cols-2 gap-4">
         {isLoading && (
           <div className="text-sm text-slate-400 px-2">加载中...</div>
         )}
