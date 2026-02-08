@@ -4,7 +4,7 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase env vars missing. Using mock data.');
+  // No console output to avoid leaking environment details.
 }
 
 export const supabase = supabaseUrl && supabaseAnonKey

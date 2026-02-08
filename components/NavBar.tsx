@@ -5,9 +5,11 @@ import { Page } from '../types';
 interface Props {
   currentPage: Page;
   onPageChange: (page: Page) => void;
+  isAuthenticated?: boolean;
+  onRequireLogin?: () => void;
 }
 
-const NavBar: React.FC<Props> = ({ currentPage, onPageChange }) => {
+const NavBar: React.FC<Props> = ({ currentPage, onPageChange, isAuthenticated = false, onRequireLogin }) => {
   const navItems = [
     { id: Page.HOME, label: '首页', icon: '🏠' },
     { id: Page.RANKING, label: '排行榜', icon: '🏆' },
@@ -16,12 +18,24 @@ const NavBar: React.FC<Props> = ({ currentPage, onPageChange }) => {
     { id: Page.PROFILE, label: '我的', icon: '👤' },
   ];
 
+  const requiresAuth = (page: Page) => (
+    page === Page.POST || page === Page.PROFILE || page === Page.MESSAGES
+  );
+
+  const handleNavigate = (page: Page) => {
+    if (!isAuthenticated && requiresAuth(page)) {
+      onRequireLogin?.();
+      return;
+    }
+    onPageChange(page);
+  };
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-slate-200 px-6 py-3 pb-6 flex justify-between items-end z-50">
       {navItems.map((item) => (
         <button
           key={item.id}
-          onClick={() => onPageChange(item.id)}
+          onClick={() => handleNavigate(item.id)}
           className={`flex flex-col items-center transition-all ${
             item.special ? '-mt-8' : ''
           }`}

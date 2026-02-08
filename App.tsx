@@ -21,6 +21,7 @@ const App: React.FC = () => {
   const [isProfileLoading, setIsProfileLoading] = useState(false);
   const [loadProfileError, setLoadProfileError] = useState<string | null>(null);
   const isProfileLoadingRef = useRef(false);
+  const [showLogin, setShowLogin] = useState(false);
 
   useEffect(() => {
     if (!supabase) {
@@ -91,7 +92,6 @@ const App: React.FC = () => {
       );
       const { data: profile, error: profileError } = profileResult as any;
       if (profileError) {
-        console.error('Profile fetch error:', profileError);
         // Keep existing user to avoid bouncing to onboarding on transient errors.
         if (!currentUser) {
           setNeedsOnboarding(false);
@@ -131,7 +131,6 @@ const App: React.FC = () => {
         email: profile.email
       });
     } catch (error) {
-      console.error('loadProfile failed:', error);
       // Avoid forcing onboarding on transient timeouts.
       if (!currentUser) {
         setNeedsOnboarding(false);
@@ -167,10 +166,18 @@ const App: React.FC = () => {
             onBack={() => setCurrentPage(Page.HOME)}
             currentUser={currentUser}
             isAuthenticated={!!sessionUserId}
+            onRequireLogin={() => setShowLogin(true)}
           />
         ) : <Home onSelectTarget={navigateToDetails} isAuthenticated={!!sessionUserId} />;
       case Page.POST:
-        return <Post onSuccess={() => setCurrentPage(Page.HOME)} currentUser={currentUser} />;
+        return (
+          <Post
+            onSuccess={() => setCurrentPage(Page.HOME)}
+            currentUser={currentUser}
+            isAuthenticated={!!sessionUserId}
+            onRequireLogin={() => setShowLogin(true)}
+          />
+        );
       case Page.RANKING:
         return <Leaderboard />;
       case Page.PROFILE:
@@ -179,6 +186,8 @@ const App: React.FC = () => {
             currentUser={currentUser}
             sessionUserId={sessionUserId}
             onNavigateToTarget={navigateToDetails}
+            isAuthenticated={!!sessionUserId}
+            onRequireLogin={() => setShowLogin(true)}
           />
         );
       case Page.MESSAGES:
@@ -194,7 +203,7 @@ const App: React.FC = () => {
     }
   };
 
-  const canRenderApp = !!supabase && sessionUserId && !needsOnboarding && !!currentUser;
+  const canRenderApp = !!supabase && (!needsOnboarding || !!sessionUserId);
 
   return (
     <div className="max-w-md mx-auto relative bg-slate-50 shadow-xl min-h-screen overflow-x-hidden no-scrollbar">
@@ -206,7 +215,6 @@ const App: React.FC = () => {
           未配置 Supabase
         </div>
       )}
-      {isAuthReady && supabase && !sessionUserId && <Login />}
       {isAuthReady && supabase && sessionUserId && needsOnboarding && (
         <Onboarding
           sessionUserId={sessionUserId}
@@ -216,10 +224,15 @@ const App: React.FC = () => {
           }}
         />
       )}
-      {isAuthReady && canRenderApp && renderPage()}
+      {isAuthReady && supabase && !needsOnboarding && renderPage()}
       
-      {sessionUserId && currentPage !== Page.DETAILS && canRenderApp && (
-        <NavBar currentPage={currentPage} onPageChange={setCurrentPage} />
+      {currentPage !== Page.DETAILS && isAuthReady && !needsOnboarding && (
+        <NavBar
+          currentPage={currentPage}
+          onPageChange={setCurrentPage}
+          isAuthenticated={!!sessionUserId}
+          onRequireLogin={() => setShowLogin(true)}
+        />
       )}
 
       {isProfileLoading && (
@@ -237,6 +250,20 @@ const App: React.FC = () => {
           >
             重试
           </button>
+        </div>
+      )}
+
+      {showLogin && !sessionUserId && (
+        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 overflow-auto">
+          <div className="absolute top-4 right-4">
+            <button
+              onClick={() => setShowLogin(false)}
+              className="text-xs text-slate-500 border border-slate-200 rounded-full px-3 py-1"
+            >
+              关闭
+            </button>
+          </div>
+          <Login />
         </div>
       )}
     </div>

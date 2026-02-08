@@ -7,9 +7,11 @@ import { supabase } from '../supabaseClient';
 interface Props {
   onSuccess: () => void;
   currentUser: AppUser | null;
+  isAuthenticated: boolean;
+  onRequireLogin?: () => void;
 }
 
-const Post: React.FC<Props> = ({ onSuccess, currentUser }) => {
+const Post: React.FC<Props> = ({ onSuccess, currentUser, isAuthenticated, onRequireLogin }) => {
   const [step, setStep] = useState<1 | 2>(1);
   const [formData, setFormData] = useState({
     name: '',
@@ -215,7 +217,21 @@ name, type, description, avatarStyle。
     <div className="min-h-screen pb-32 px-6 pt-10">
       <h2 className="text-3xl font-headline text-orange-600 mb-8 italic">投稿新对象 🔥</h2>
 
-      {step === 1 && (
+      {!isAuthenticated && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center">
+          <p className="text-sm text-slate-600 mb-4">登录后才能投稿</p>
+          <button
+            onClick={() => onRequireLogin?.()}
+            className="px-4 py-2 rounded-full bg-orange-500 text-white font-bold text-sm"
+          >
+            去登录
+          </button>
+        </div>
+      )}
+
+      {isAuthenticated && (
+        <>
+        {step === 1 && (
         <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-6">
           <label className="block text-sm font-bold text-slate-500 mb-2">经历描述（可语音输入）</label>
           <textarea
@@ -250,7 +266,7 @@ name, type, description, avatarStyle。
         </div>
       )}
 
-      {step === 2 && (
+        {step === 2 && (
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="flex items-center justify-between">
             <button
@@ -337,6 +353,8 @@ name, type, description, avatarStyle。
             立即提交 🚀
           </button>
         </form>
+        )}
+        </>
       )}
     </div>
   );

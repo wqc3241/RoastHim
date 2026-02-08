@@ -7,9 +7,11 @@ interface Props {
   currentUser: AppUser | null;
   sessionUserId: string | null;
   onNavigateToTarget: (target: RoastTarget) => void;
+  isAuthenticated: boolean;
+  onRequireLogin?: () => void;
 }
 
-const Profile: React.FC<Props> = ({ currentUser, sessionUserId, onNavigateToTarget }) => {
+const Profile: React.FC<Props> = ({ currentUser, sessionUserId, onNavigateToTarget, isAuthenticated, onRequireLogin }) => {
   const [activeTab, setActiveTab] = useState<'roasts' | 'targets' | 'badges'>('roasts');
   const [user, setUser] = useState<AppUser | null>(currentUser);
   const [stats, setStats] = useState<UserStats | null>(currentUser?.stats ?? null);
@@ -148,6 +150,20 @@ const Profile: React.FC<Props> = ({ currentUser, sessionUserId, onNavigateToTarg
     if (!supabase) return;
     await supabase.auth.signOut();
   };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center text-slate-500 text-sm gap-3">
+        <span>请先登录查看个人资料</span>
+        <button
+          onClick={() => onRequireLogin?.()}
+          className="px-4 py-2 rounded-full bg-orange-500 text-white font-bold text-sm"
+        >
+          去登录
+        </button>
+      </div>
+    );
+  }
 
   if (!user) {
     return (

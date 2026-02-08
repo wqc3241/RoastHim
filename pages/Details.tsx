@@ -8,9 +8,10 @@ interface Props {
   onBack: () => void;
   currentUser: AppUser | null;
   isAuthenticated: boolean;
+  onRequireLogin?: () => void;
 }
 
-const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated }) => {
+const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated, onRequireLogin }) => {
   const [roasts, setRoasts] = useState<RoastComment[]>([]);
   const [inputText, setInputText] = useState('');
   const [sort, setSort] = useState<'hot' | 'new'>('hot');
@@ -125,6 +126,10 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
   };
 
   const handleLike = async (roastId: string) => {
+    if (!isAuthenticated) {
+      onRequireLogin?.();
+      return;
+    }
     if (likedIds.has(roastId)) return;
     const current = roasts.find((roast) => roast.id === roastId);
     const nextLikes = (current?.likes ?? 0) + 1;
@@ -150,7 +155,6 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
         .eq('id', roastId);
 
       if (likeError) {
-        console.error('Like update failed:', likeError);
         setLikedIds((prev) => {
           const next = new Set(prev);
           next.delete(roastId);
@@ -242,6 +246,17 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
         </div>
 
         <div className="space-y-6">
+          {!isAuthenticated && (
+            <div className="bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-500">
+              需要登录后才能发表评论和点赞。
+              <button
+                onClick={() => onRequireLogin?.()}
+                className="ml-2 text-orange-600 font-bold"
+              >
+                去登录
+              </button>
+            </div>
+          )}
           {isLoading && (
             <div className="text-sm text-slate-400">加载中...</div>
           )}
@@ -294,12 +309,19 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="用最犀利的话骂他..."
+            placeholder={isAuthenticated ? "用最犀利的话骂他..." : "登录后才能发表评论"}
             className="w-full bg-white border border-slate-200 rounded-full px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500/50"
+            disabled={!isAuthenticated}
           />
         </div>
         <button 
-          onClick={handleSend}
+          onClick={() => {
+            if (!isAuthenticated) {
+              onRequireLogin?.();
+              return;
+            }
+            handleSend();
+          }}
           className="bg-orange-500 text-white font-bold px-5 py-2.5 rounded-full text-sm shadow-lg shadow-orange-500/20 active:scale-95 transition-all"
         >
           发送
