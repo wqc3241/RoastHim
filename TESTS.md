@@ -17,6 +17,14 @@ Run all tests below after every new feature. All must pass to consider work comp
 - Logout from Profile
 - Log back in and confirm onboarding does not reappear
 
+## Email Registration (Supabase)
+- Switch to 邮箱注册
+- Register with a new email and password
+- Verify prompt to check email for confirmation
+- Click the confirmation link and return to the app
+- Verify login succeeds and onboarding appears if profile is missing
+- (If prompted) click “重新发送验证邮件” and verify email arrives
+
 ## Home Feed
 - Verify Home renders 2-column layout on mobile width
 - Verify each card shows:

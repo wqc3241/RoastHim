@@ -7,26 +7,53 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [showResend, setShowResend] = useState(false);
+  const [isResending, setIsResending] = useState(false);
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!supabase) return;
     setIsLoading(true);
     setMessage(null);
+    setShowResend(false);
 
     const authCall = mode === 'login'
       ? supabase.auth.signInWithPassword({ email, password })
-      : supabase.auth.signUp({ email, password });
+      : supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: `${window.location.origin}/?onboarding=1` }
+        });
 
-    const { error } = await authCall;
+    const { data, error } = await authCall;
 
     if (error) {
       setMessage(error.message);
+      if (error.message.toLowerCase().includes('email not confirmed')) {
+        setShowResend(true);
+      }
     } else if (mode === 'signup') {
-      setMessage('注册成功，请检查邮箱进行验证。');
+      if (data.session) {
+        setMessage('注册成功，已自动登录。');
+      } else {
+        setMessage('注册成功，请检查邮箱进行验证。');
+        setShowResend(true);
+      }
     }
 
     setIsLoading(false);
+  };
+
+  const handleResend = async () => {
+    if (!supabase || !email) return;
+    setIsResending(true);
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+      options: { emailRedirectTo: `${window.location.origin}/?onboarding=1` }
+    });
+    setMessage(error ? error.message : '验证邮件已发送，请检查邮箱。');
+    setIsResending(false);
   };
 
   const handleGoogle = async () => {
@@ -95,6 +122,15 @@ const Login: React.FC = () => {
 
         {message && (
           <p className="text-xs text-slate-500 mt-4">{message}</p>
+        )}
+        {showResend && (
+          <button
+            onClick={handleResend}
+            disabled={isResending}
+            className="mt-3 text-xs text-orange-600 font-bold"
+          >
+            {isResending ? '发送中...' : '重新发送验证邮件'}
+          </button>
         )}
       </div>
     </div>

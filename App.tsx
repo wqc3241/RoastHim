@@ -37,6 +37,14 @@ const App: React.FC = () => {
         const { data } = await supabase.auth.getSession();
         const userId = data.session?.user?.id ?? null;
         setSessionUserId(userId);
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('onboarding') === '1') {
+          url.searchParams.delete('onboarding');
+          window.history.replaceState({}, '', url.toString());
+          if (userId) {
+            setNeedsOnboarding(true);
+          }
+        }
         if (userId) {
           await loadProfile(data.session?.user);
         }
