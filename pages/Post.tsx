@@ -4,6 +4,7 @@ import { AppUser, AvatarStyle, RoastTarget } from '../types';
 import { getPersonaAvatarUrl } from '../constants';
 import { supabase } from '../supabaseClient';
 import { applyProgress, EXP_RULES, syncBadges } from '../utils/progression';
+import { containsProfanity } from '../utils/moderation';
 
 interface Props {
   onSuccess: () => void;
@@ -25,6 +26,7 @@ const Post: React.FC<Props> = ({ onSuccess, currentUser, isAuthenticated, onRequ
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [textError, setTextError] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
 
   const styles: { id: AvatarStyle; label: string; icon: string }[] = [
@@ -119,6 +121,10 @@ const Post: React.FC<Props> = ({ onSuccess, currentUser, isAuthenticated, onRequ
       setAiError('请先输入经历内容');
       return;
     }
+    if (containsProfanity(experienceText)) {
+      setTextError('经历描述包含不当用语，请修改后再生成');
+      return;
+    }
     const geminiKey = (process as any).env?.GEMINI_API_KEY || (process as any).env?.API_KEY;
     if (!geminiKey) {
       setAiError('未配置 GEMINI_API_KEY');
@@ -127,6 +133,7 @@ const Post: React.FC<Props> = ({ onSuccess, currentUser, isAuthenticated, onRequ
 
     setIsGenerating(true);
     setAiError(null);
+    setTextError(null);
 
     const prompt = `你是内容整理助手。根据用户描述生成结构化信息，严格输出 JSON，字段为：
 name, type, description, avatarStyle, tags。
@@ -183,6 +190,14 @@ name, type, description, avatarStyle, tags。
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
+    if (
+      containsProfanity(formData.name) ||
+      containsProfanity(formData.description) ||
+      containsProfanity(formData.tags.join(' '))
+    ) {
+      setTextError('内容包含不当用语，请修改后再提交');
+      return;
+    }
     const newTarget: RoastTarget = {
       id: Date.now().toString(),
       name: formData.name,
@@ -264,6 +279,7 @@ name, type, description, avatarStyle, tags。
             </button>
           </div>
           {aiError && <p className="text-xs text-red-500 mt-2">{aiError}</p>}
+          {textError && <p className="text-xs text-red-500 mt-2">{textError}</p>}
           <p className="text-[10px] text-slate-400 mt-2">点击生成后进入下一步</p>
         </div>
       )}
@@ -366,6 +382,7 @@ name, type, description, avatarStyle, tags。
           >
             立即提交 🚀
           </button>
+          {textError && <p className="text-xs text-red-500">{textError}</p>}
         </form>
         )}
         </>

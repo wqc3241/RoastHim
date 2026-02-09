@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AppUser, RoastTarget, RoastComment, RoastType } from '../types';
 import { supabase } from '../supabaseClient';
 import { applyProgress, EXP_RULES, syncBadges } from '../utils/progression';
+import { containsProfanity } from '../utils/moderation';
 
 interface Props {
   target: RoastTarget;
@@ -27,6 +28,7 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
   const recognitionRef = useRef<any>(null);
   const [isRecognizing, setIsRecognizing] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
+  const [textError, setTextError] = useState<string | null>(null);
   const [showTranscriptIds, setShowTranscriptIds] = useState<Set<string>>(new Set());
   const [replyingTo, setReplyingTo] = useState<RoastComment | null>(null);
   const [expandedReplyIds, setExpandedReplyIds] = useState<Set<string>>(new Set());
@@ -173,6 +175,10 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
   const handleSend = async () => {
     if (!inputText.trim()) return;
     if (!currentUser) return;
+    if (containsProfanity(inputText)) {
+      setTextError('内容包含不当用语，请修改后再发送');
+      return;
+    }
     const replyTarget = replyingTo;
     const newRoast: RoastComment = {
       id: Date.now().toString(),
@@ -190,6 +196,7 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
       replyToUserName: replyTarget?.userName
     };
     setInputText('');
+    setTextError(null);
     setReplyingTo(null);
     await persistComment(newRoast);
   };
@@ -266,6 +273,10 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
     if (!audioBlob || !currentUser || !supabase) return;
     if (audioBlob.size === 0) {
       setAudioError('录音为空，请重新录制');
+      return;
+    }
+    if (audioTranscript && containsProfanity(audioTranscript)) {
+      setAudioError('转文字包含不当用语，请修改后再发送');
       return;
     }
     const roastId = Date.now().toString();
@@ -696,6 +707,11 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
           发送
         </button>
       </div>
+      {textError && (
+        <div className="fixed bottom-20 left-4 right-4 bg-white border border-slate-200 rounded-full px-3 py-2 text-xs text-red-500">
+          {textError}
+        </div>
+      )}
 
       {audioPreviewUrl && (
         <div className="fixed bottom-20 left-4 right-4 bg-white border border-slate-200 rounded-2xl p-3 z-40">
