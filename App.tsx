@@ -12,6 +12,7 @@ import { supabase } from './supabaseClient';
 import Onboarding from './pages/Onboarding';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { Analytics } from '@vercel/analytics/react';
+import Messages from './pages/Messages';
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>(Page.HOME);
@@ -202,11 +203,10 @@ const App: React.FC = () => {
         );
       case Page.MESSAGES:
         return (
-          <div className="flex flex-col items-center justify-center h-screen px-10 text-center opacity-40">
-            <span className="text-6xl mb-6">🔔</span>
-            <h3 className="text-xl font-bold mb-2">暂无新消息</h3>
-            <p className="text-sm">当有人给你点赞或评论时，你会在这里看到通知。</p>
-          </div>
+          <Messages
+            currentUser={currentUser}
+            onNavigateToTarget={navigateToDetails}
+          />
         );
       default:
         return <Home onSelectTarget={navigateToDetails} />;

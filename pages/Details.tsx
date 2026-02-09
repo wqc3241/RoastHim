@@ -1,7 +1,8 @@
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AppUser, RoastTarget, RoastComment, RoastType } from '../types';
 import { supabase } from '../supabaseClient';
+import { applyProgress, EXP_RULES, syncBadges } from '../utils/progression';
 
 interface Props {
   target: RoastTarget;
@@ -17,10 +18,31 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
   const [sort, setSort] = useState<'hot' | 'new'>('hot');
   const [isLoading, setIsLoading] = useState(false);
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [audioPreviewUrl, setAudioPreviewUrl] = useState<string | null>(null);
+  const [audioTranscript, setAudioTranscript] = useState('');
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recognitionRef = useRef<any>(null);
+  const [isRecognizing, setIsRecognizing] = useState(false);
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const [showTranscriptIds, setShowTranscriptIds] = useState<Set<string>>(new Set());
+  const [replyingTo, setReplyingTo] = useState<RoastComment | null>(null);
+  const [expandedReplyIds, setExpandedReplyIds] = useState<Set<string>>(new Set());
   const [targetStats, setTargetStats] = useState({
     roastCount: target.roastCount ?? 0,
     totalLikes: target.totalLikes ?? 0
   });
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileUser, setProfileUser] = useState<{
+    id: string;
+    name: string;
+    avatar: string;
+    quote?: string;
+    level?: number;
+  } | null>(null);
 
   const sortedRoasts = useMemo(() => {
     const items = [...roasts];
@@ -33,6 +55,22 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
       return bTime - aTime;
     });
   }, [roasts, sort]);
+
+  const mainComments = useMemo(
+    () => sortedRoasts.filter((roast) => !roast.replyToCommentId),
+    [sortedRoasts]
+  );
+  const replyMap = useMemo(() => {
+    const map: Record<string, RoastComment[]> = {};
+    sortedRoasts
+      .filter((roast) => roast.replyToCommentId)
+      .forEach((reply) => {
+        const parentId = reply.replyToCommentId as string;
+        if (!map[parentId]) map[parentId] = [];
+        map[parentId].push(reply);
+      });
+    return map;
+  }, [sortedRoasts]);
 
   useEffect(() => {
     const loadRoasts = async () => {
@@ -69,48 +107,33 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
     loadRoasts();
   }, [target.id, sort]);
 
-  const handleSend = async () => {
-    if (!inputText.trim()) return;
-    if (!currentUser) return;
-    const newRoast: RoastComment = {
-      id: Date.now().toString(),
-      targetId: target.id,
-      userId: currentUser.id,
-      userName: currentUser.name,
-      userAvatar: currentUser.avatar,
-      content: inputText,
-      type: 'text',
-      likes: 0,
-      isChampion: false,
-      timestamp: '刚刚'
+  useEffect(() => {
+    return () => {
+      if (audioPreviewUrl) {
+        URL.revokeObjectURL(audioPreviewUrl);
+      }
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
     };
+  }, [audioPreviewUrl]);
+
+  const persistComment = async (newRoast: RoastComment) => {
     setRoasts([newRoast, ...roasts]);
     setTargetStats((prev) => ({
       roastCount: prev.roastCount + 1,
       totalLikes: prev.totalLikes
     }));
-    setInputText('');
 
     if (supabase) {
       await supabase.from('roast_comments').insert([newRoast]);
-      const { data: stats } = await supabase
-        .from('user_stats')
-        .select('*')
-        .eq('userId', currentUser.id)
-        .maybeSingle();
-      if (stats) {
-        await supabase
-          .from('user_stats')
-          .update({ roastsPosted: (stats.roastsPosted ?? 0) + 1 })
-          .eq('userId', currentUser.id);
-      } else {
-        await supabase.from('user_stats').insert([{
-          userId: currentUser.id,
-          targetsCreated: 0,
-          roastsPosted: 1,
-          likesReceived: 0
-        }]);
-      }
+      await applyProgress({
+        userId: currentUser!.id,
+        roastsPosted: 1,
+        exp: EXP_RULES.comment
+      });
+      await syncBadges(currentUser!.id);
       const { data: targetRow } = await supabase
         .from('roast_targets')
         .select('roastCount,totalLikes')
@@ -122,7 +145,170 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
           roastCount: (targetRow?.roastCount ?? 0) + 1
         })
         .eq('id', target.id);
+
+      if (target.creatorId && target.creatorId !== currentUser!.id) {
+        await supabase.from('notifications').insert([{
+          userId: target.creatorId,
+          type: 'comment',
+          targetId: target.id,
+          commentId: newRoast.id,
+          actorId: currentUser!.id,
+          actorName: currentUser!.name
+        }]);
+      }
+
+      if (newRoast.replyToUserId && newRoast.replyToUserId !== currentUser!.id) {
+        await supabase.from('notifications').insert([{
+          userId: newRoast.replyToUserId,
+          type: 'comment',
+          targetId: target.id,
+          commentId: newRoast.id,
+          actorId: currentUser!.id,
+          actorName: currentUser!.name
+        }]);
+      }
     }
+  };
+
+  const handleSend = async () => {
+    if (!inputText.trim()) return;
+    if (!currentUser) return;
+    const replyTarget = replyingTo;
+    const newRoast: RoastComment = {
+      id: Date.now().toString(),
+      targetId: target.id,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userAvatar: currentUser.avatar,
+      content: inputText,
+      type: 'text',
+      likes: 0,
+      isChampion: false,
+      timestamp: '刚刚',
+      replyToCommentId: replyTarget?.id,
+      replyToUserId: replyTarget?.userId,
+      replyToUserName: replyTarget?.userName
+    };
+    setInputText('');
+    setReplyingTo(null);
+    await persistComment(newRoast);
+  };
+
+  const handleVoiceToggle = async () => {
+    if (!isAuthenticated) {
+      onRequireLogin?.();
+      return;
+    }
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setAudioError('当前浏览器不支持语音识别');
+      return;
+    }
+    if (!window.MediaRecorder) {
+      setAudioError('当前浏览器不支持语音录制');
+      return;
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (isRecording) {
+      recorderRef.current?.stop();
+      recognitionRef.current?.stop();
+      setIsRecognizing(false);
+      setIsRecording(false);
+      stream.getTracks().forEach((t) => t.stop());
+      return;
+    }
+
+    audioChunksRef.current = [];
+    setAudioError(null);
+    setAudioTranscript('');
+    const recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) audioChunksRef.current.push(e.data);
+    };
+    recorder.onstop = () => {
+      const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      setAudioBlob(blob);
+      const url = URL.createObjectURL(blob);
+      setAudioPreviewUrl(url);
+    };
+    recorder.start();
+    recorderRef.current = recorder;
+    setIsRecording(true);
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'zh-CN';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.onresult = (event: any) => {
+      let finalText = '';
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          finalText += result[0].transcript;
+        }
+      }
+      if (finalText.trim()) {
+        setAudioTranscript((prev) => `${prev}${prev ? ' ' : ''}${finalText.trim()}`);
+      }
+    };
+    recognition.onerror = () => {
+      setIsRecognizing(false);
+    };
+    recognition.onend = () => {
+      setIsRecognizing(false);
+    };
+    recognition.start();
+    recognitionRef.current = recognition;
+    setIsRecognizing(true);
+  };
+
+  const handleSendAudio = async () => {
+    if (!audioBlob || !currentUser || !supabase) return;
+    if (audioBlob.size === 0) {
+      setAudioError('录音为空，请重新录制');
+      return;
+    }
+    const roastId = Date.now().toString();
+    const path = `${currentUser.id}/${roastId}.webm`;
+    const file = new File([audioBlob], `${roastId}.webm`, {
+      type: audioBlob.type || 'audio/webm'
+    });
+    const { error } = await supabase.storage
+      .from('roast-audio')
+      .upload(path, file, { upsert: true, contentType: file.type });
+    if (error) {
+      setAudioError('语音上传失败，请重试');
+      return;
+    }
+
+    const { data: publicUrl } = supabase.storage
+      .from('roast-audio')
+      .getPublicUrl(path);
+
+    const newRoast: RoastComment = {
+      id: roastId,
+      targetId: target.id,
+      userId: currentUser.id,
+      userName: currentUser.name,
+      userAvatar: currentUser.avatar,
+      content: audioTranscript || '语音评论',
+      type: 'audio',
+      mediaUrl: publicUrl.publicUrl,
+      transcript: audioTranscript,
+      likes: 0,
+      isChampion: false,
+      timestamp: '刚刚',
+      replyToCommentId: replyingTo?.id,
+      replyToUserId: replyingTo?.userId,
+      replyToUserName: replyingTo?.userName
+    };
+    setAudioBlob(null);
+    if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
+    setAudioPreviewUrl(null);
+    setAudioTranscript('');
+    setReplyingTo(null);
+    setAudioError(null);
+    await persistComment(newRoast);
   };
 
   const handleLike = async (roastId: string) => {
@@ -188,8 +374,90 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
             totalLikes
           })
           .eq('id', target.id);
+
+        if (currentUser) {
+          await applyProgress({
+            userId: currentUser.id,
+            exp: EXP_RULES.like
+          });
+          await syncBadges(currentUser.id);
+        }
+
+        if (current?.userId && currentUser && current.userId !== currentUser.id) {
+          await applyProgress({
+            userId: current.userId,
+            likesReceived: 1,
+            exp: EXP_RULES.receivedLike
+          });
+          await supabase.from('notifications').insert([{
+            userId: current.userId,
+            type: 'like',
+            targetId: target.id,
+            commentId: roastId,
+            actorId: currentUser.id,
+            actorName: currentUser.name
+          }]);
+        }
       }
     }
+  };
+
+  const toggleTranscript = (roastId: string) => {
+    setShowTranscriptIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(roastId)) {
+        next.delete(roastId);
+      } else {
+        next.add(roastId);
+      }
+      return next;
+    });
+  };
+
+  const toggleReplies = (parentId: string) => {
+    setExpandedReplyIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(parentId)) {
+        next.delete(parentId);
+      } else {
+        next.add(parentId);
+      }
+      return next;
+    });
+  };
+
+  const handleOpenProfile = async (roast: RoastComment) => {
+    if (!isAuthenticated) {
+      onRequireLogin?.();
+      return;
+    }
+    setIsProfileModalOpen(true);
+    setProfileLoading(true);
+    setProfileUser(null);
+
+    if (supabase && roast.userId) {
+      const { data } = await supabase
+        .from('public_users')
+        .select('id,name,avatar,quote,level')
+        .eq('id', roast.userId)
+        .maybeSingle();
+      if (data) {
+        setProfileUser(data);
+      } else {
+        setProfileUser({
+          id: roast.userId,
+          name: roast.userName,
+          avatar: roast.userAvatar
+        });
+      }
+    } else {
+      setProfileUser({
+        id: roast.userId,
+        name: roast.userName,
+        avatar: roast.userAvatar
+      });
+    }
+    setProfileLoading(false);
   };
 
   return (
@@ -260,56 +528,153 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
           {isLoading && (
             <div className="text-sm text-slate-400">加载中...</div>
           )}
-          {sortedRoasts.map(roast => (
-            <div key={roast.id} className="animate-in slide-in-from-bottom-4 fade-in">
-              <div className="flex gap-3 items-start">
-                <div className="relative">
-                  <img src={roast.userAvatar} className="w-10 h-10 rounded-full object-cover border border-slate-200" />
-                  {roast.isChampion && (
-                    <span className="absolute -top-1 -right-1 text-sm">👑</span>
-                  )}
-                </div>
-                <div className="flex-1">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-sm font-bold text-orange-600">{roast.userName}</span>
-                    <span className="text-[10px] text-slate-400">{roast.timestamp}</span>
-                  </div>
-                  <p className="text-slate-700 text-sm leading-relaxed mb-3">
-                    {roast.content}
-                  </p>
-                  
-                  {roast.type === 'image' && roast.mediaUrl && (
-                    <img src={roast.mediaUrl} className="w-48 rounded-xl mb-3 border border-slate-200" />
-                  )}
+          {mainComments.map(roast => {
+            const replies = replyMap[roast.id] || [];
+            const isExpanded = expandedReplyIds.has(roast.id);
+            const visibleReplies = isExpanded ? replies : replies.slice(0, 1);
+            return (
+              <div key={roast.id} className="animate-in slide-in-from-bottom-4 fade-in">
+                <div className="flex gap-3 items-start">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenProfile(roast)}
+                    className="relative"
+                  >
+                    <img src={roast.userAvatar} className="w-10 h-10 rounded-full object-cover border border-slate-200" />
+                    {roast.isChampion && (
+                      <span className="absolute -top-1 -right-1 text-sm">👑</span>
+                    )}
+                  </button>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenProfile(roast)}
+                        className="text-sm font-bold text-orange-600"
+                      >
+                        {roast.userName}
+                      </button>
+                      <span className="text-[10px] text-slate-400">{roast.timestamp}</span>
+                    </div>
+                    {roast.replyToUserName && (
+                      <div className="text-xs text-slate-500 mb-1">
+                        回复 <span className="text-orange-600 font-bold">@{roast.replyToUserName}</span>
+                      </div>
+                    )}
+                    <p className="text-slate-700 text-sm leading-relaxed mb-3">
+                      {roast.content}
+                    </p>
+                    
+                    {roast.type === 'image' && roast.mediaUrl && (
+                      <img src={roast.mediaUrl} className="w-48 rounded-xl mb-3 border border-slate-200" />
+                    )}
+                    {roast.type === 'audio' && roast.mediaUrl && (
+                      <div className="mb-3">
+                        <audio controls className="w-full">
+                          <source src={roast.mediaUrl} />
+                        </audio>
+                        <button
+                          onClick={() => toggleTranscript(roast.id)}
+                          className="mt-2 text-xs text-orange-600 font-bold"
+                        >
+                          转文字
+                        </button>
+                        {showTranscriptIds.has(roast.id) && (
+                          <div className="text-xs text-slate-500 mt-1">
+                            {roast.transcript ? roast.transcript : '暂无转文字'}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
-                  <div className="flex gap-4">
-                    <button
-                      onClick={() => handleLike(roast.id)}
-                      className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-orange-500 transition-colors"
-                    >
-                      <span className="text-base">👍</span>
-                      {roast.likes}
-                    </button>
-                    <button className="text-xs text-slate-500">回复</button>
+                    <div className="flex gap-4">
+                      <button
+                        onClick={() => handleLike(roast.id)}
+                        className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-orange-500 transition-colors"
+                      >
+                        <span className="text-base">👍</span>
+                        {roast.likes}
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!isAuthenticated) {
+                            onRequireLogin?.();
+                            return;
+                          }
+                          setReplyingTo(roast);
+                        }}
+                        className="text-xs text-slate-500"
+                      >
+                        回复
+                      </button>
+                    </div>
+
+                    {replies.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {visibleReplies.map((reply) => (
+                          <div key={reply.id} className="bg-slate-50 border border-slate-200 rounded-xl p-2">
+                            <div className="text-[11px] text-slate-500 mb-1">
+                              <span className="text-orange-600 font-bold">{reply.userName}</span>
+                              {reply.replyToUserName && (
+                                <>
+                                  {' '}回复{' '}
+                                  <span className="text-orange-600 font-bold">@{reply.replyToUserName}</span>
+                                </>
+                              )}
+                            </div>
+                            <div className="text-xs text-slate-600">{reply.content}</div>
+                          </div>
+                        ))}
+                        {replies.length > 1 && (
+                          <button
+                            onClick={() => toggleReplies(roast.id)}
+                            className="text-[11px] text-orange-600 font-bold"
+                          >
+                            {isExpanded ? '收起回复' : `查看其余${replies.length - 1}条回复`}
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
       {/* Footer Input */}
       <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-slate-200 p-4 pb-8 flex items-center gap-3">
-        <button className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-xl">📷</button>
-        <button className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-xl">🎤</button>
+        {replyingTo && (
+          <div className="absolute -top-10 left-4 right-4 bg-white border border-slate-200 rounded-full px-3 py-1 text-xs text-slate-600 flex items-center justify-between">
+            <span>回复 @{replyingTo.userName}</span>
+            <button
+              onClick={() => setReplyingTo(null)}
+              className="text-slate-400"
+            >
+              取消
+            </button>
+          </div>
+        )}
+        <button
+          onClick={handleVoiceToggle}
+          className={`w-10 h-10 rounded-full flex items-center justify-center text-xl ${
+            isRecording ? 'bg-orange-500 text-white' : 'bg-slate-100'
+          }`}
+        >
+          🎤
+        </button>
         <div className="flex-1 relative">
           <input 
             type="text" 
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder={isAuthenticated ? "用最犀利的话骂他..." : "登录后才能发表评论"}
+            placeholder={
+              isAuthenticated
+                ? (replyingTo ? `回复 @${replyingTo.userName}` : '用最犀利的话骂他...')
+                : '登录后才能发表评论'
+            }
             className="w-full bg-white border border-slate-200 rounded-full px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500/50"
             disabled={!isAuthenticated}
           />
@@ -320,13 +685,69 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
               onRequireLogin?.();
               return;
             }
-            handleSend();
+            if (audioBlob) {
+              handleSendAudio();
+            } else {
+              handleSend();
+            }
           }}
           className="bg-orange-500 text-white font-bold px-5 py-2.5 rounded-full text-sm shadow-lg shadow-orange-500/20 active:scale-95 transition-all"
         >
           发送
         </button>
       </div>
+
+      {audioPreviewUrl && (
+        <div className="fixed bottom-20 left-4 right-4 bg-white border border-slate-200 rounded-2xl p-3 z-40">
+          <div className="text-xs text-slate-500 mb-2">语音预览</div>
+          <audio controls className="w-full">
+            <source src={audioPreviewUrl} />
+          </audio>
+          <input
+            placeholder="可选：转文字内容"
+            className="mt-2 w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-orange-500"
+            value={audioTranscript}
+            onChange={(e) => setAudioTranscript(e.target.value)}
+          />
+          {isRecognizing && (
+            <div className="text-[10px] text-slate-400 mt-2">语音识别中…</div>
+          )}
+          {audioError && (
+            <div className="text-[10px] text-red-500 mt-2">{audioError}</div>
+          )}
+        </div>
+      )}
+
+      {isProfileModalOpen && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-6">
+          <div className="w-full max-w-sm bg-white rounded-2xl p-5 relative">
+            <button
+              onClick={() => setIsProfileModalOpen(false)}
+              className="absolute right-3 top-3 text-slate-400 text-xs"
+            >
+              关闭
+            </button>
+            {profileLoading && (
+              <div className="text-sm text-slate-400">加载中...</div>
+            )}
+            {!profileLoading && profileUser && (
+              <div className="flex flex-col items-center text-center gap-3">
+                <img
+                  src={profileUser.avatar}
+                  className="w-16 h-16 rounded-full border border-slate-200"
+                />
+                <div className="text-base font-bold text-slate-900">{profileUser.name}</div>
+                {profileUser.level !== undefined && (
+                  <div className="text-xs text-slate-500">LV.{profileUser.level}</div>
+                )}
+                {profileUser.quote && (
+                  <p className="text-xs text-slate-600">{profileUser.quote}</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

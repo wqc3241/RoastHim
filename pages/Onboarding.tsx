@@ -39,7 +39,8 @@ const Onboarding: React.FC<Props> = ({ sessionUserId, onComplete }) => {
       userId: sessionUserId,
       targetsCreated: 0,
       roastsPosted: 0,
-      likesReceived: 0
+      likesReceived: 0,
+      exp: 0
     }]);
 
     const { data: profile, error: profileError } = await supabase

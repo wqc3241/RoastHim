@@ -36,13 +36,11 @@ const AvatarCard: React.FC<Props> = ({ target, onClick }) => {
             </span>
           ))}
         </div>
-        {target.topRoastPreview && (
-          <div className="bg-slate-50 p-2 rounded-lg border-l-2 border-orange-500">
-            <p className="text-xs text-slate-600 italic line-clamp-2">
-              “{target.topRoastPreview}”
-            </p>
-          </div>
-        )}
+        <div className="bg-slate-50 p-2 rounded-lg border-l-2 border-orange-500">
+          <p className="text-xs text-slate-600 italic line-clamp-2">
+            {target.topRoastPreview ? `“${target.topRoastPreview}”` : '还没人骂TA，快来当第一个！'}
+          </p>
+        </div>
       </div>
     </div>
   );

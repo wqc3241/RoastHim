@@ -36,6 +36,10 @@ export interface RoastComment {
   content: string;
   type: RoastType;
   mediaUrl?: string;
+  transcript?: string;
+  replyToCommentId?: string;
+  replyToUserId?: string;
+  replyToUserName?: string;
   duration?: number; // for audio
   likes: number;
   isChampion: boolean;
@@ -55,6 +59,7 @@ export interface UserStats {
   targetsCreated: number;
   roastsPosted: number;
   likesReceived: number;
+  exp?: number;
 }
 
 export interface AppUser {

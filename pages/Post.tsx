@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AppUser, AvatarStyle, RoastTarget } from '../types';
 import { getPersonaAvatarUrl } from '../constants';
 import { supabase } from '../supabaseClient';
+import { applyProgress, EXP_RULES, syncBadges } from '../utils/progression';
 
 interface Props {
   onSuccess: () => void;
@@ -17,7 +18,7 @@ const Post: React.FC<Props> = ({ onSuccess, currentUser, isAuthenticated, onRequ
     name: '',
     type: '领导',
     description: '',
-    tags: '',
+    tags: [] as string[],
     style: 'suit-man' as AvatarStyle
   });
   const [experienceText, setExperienceText] = useState('');
@@ -56,6 +57,17 @@ const Post: React.FC<Props> = ({ onSuccess, currentUser, isAuthenticated, onRequ
     if (!value) return formData.style;
     const match = styles.find((s) => s.id === value.trim());
     return (match ? match.id : 'mystery') as AvatarStyle;
+  };
+
+  const normalizeTags = (value?: string[] | string) => {
+    const raw = Array.isArray(value)
+      ? value
+      : (value || '').split(/[,\s]+/);
+    return raw
+      .map((tag) => tag.trim())
+      .filter(Boolean)
+      .slice(0, 3)
+      .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`));
   };
 
   const handleVoiceToggle = () => {
@@ -117,11 +129,12 @@ const Post: React.FC<Props> = ({ onSuccess, currentUser, isAuthenticated, onRequ
     setAiError(null);
 
     const prompt = `你是内容整理助手。根据用户描述生成结构化信息，严格输出 JSON，字段为：
-name, type, description, avatarStyle。
+name, type, description, avatarStyle, tags。
 约束：
 - type 必须是以下之一：${typeOptions.join('、')}。
 - avatarStyle 必须是以下之一：${styles.map(s => s.id).join('、')}。
 - description 用一句话概括“为什么要骂TA”（不超过 200 字）。
+- tags 是数组，最多 3 个，短词即可（如：甲方、改稿王、职场）。
 用户描述：${experienceText}`;
 
     try {
@@ -156,7 +169,8 @@ name, type, description, avatarStyle。
         name: parsed.name ?? prev.name,
         type: normalizeType(parsed.type),
         description: parsed.description ?? prev.description,
-        style: normalizeStyle(parsed.avatarStyle)
+        style: normalizeStyle(parsed.avatarStyle),
+        tags: normalizeTags(parsed.tags)
       }));
       setStep(2);
     } catch (error: any) {
@@ -174,12 +188,12 @@ name, type, description, avatarStyle。
       name: formData.name,
       type: formData.type,
       description: formData.description,
-      tags: [`#${formData.type}`],
+      tags: formData.tags.length > 0 ? formData.tags : [`#${formData.type}`],
       avatarStyle: formData.style,
       avatarUrl: getPersonaAvatarUrl({
         name: formData.name,
         type: formData.type,
-        tags: [`#${formData.type}`],
+        tags: formData.tags.length > 0 ? formData.tags : [`#${formData.type}`],
         description: formData.description
       }),
       roastCount: 0,
@@ -190,24 +204,12 @@ name, type, description, avatarStyle。
 
     if (supabase) {
       await supabase.from('roast_targets').insert([newTarget]);
-      const { data: stats } = await supabase
-        .from('user_stats')
-        .select('*')
-        .eq('userId', currentUser.id)
-        .maybeSingle();
-      if (stats) {
-        await supabase
-          .from('user_stats')
-          .update({ targetsCreated: (stats.targetsCreated ?? 0) + 1 })
-          .eq('userId', currentUser.id);
-      } else {
-        await supabase.from('user_stats').insert([{
-          userId: currentUser.id,
-          targetsCreated: 1,
-          roastsPosted: 0,
-          likesReceived: 0
-        }]);
-      }
+      await applyProgress({
+        userId: currentUser.id,
+        targetsCreated: 1,
+        exp: EXP_RULES.post
+      });
+      await syncBadges(currentUser.id);
     }
 
     onSuccess();
@@ -324,6 +326,18 @@ name, type, description, avatarStyle。
               className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-orange-500 text-sm"
               value={formData.description}
               onChange={e => setFormData({...formData, description: e.target.value})}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-slate-500 mb-2">标签（最多3个，用逗号分隔）</label>
+            <input
+              placeholder="#职场,#改稿王,#甲方"
+              className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-orange-500 text-sm"
+              value={formData.tags.join(',')}
+              onChange={(e) =>
+                setFormData({ ...formData, tags: normalizeTags(e.target.value) })
+              }
             />
           </div>
 

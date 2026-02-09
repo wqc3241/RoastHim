@@ -15,8 +15,11 @@ create table if not exists user_stats (
   "userId" text primary key references app_users(id) on delete cascade,
   "targetsCreated" int default 0,
   "roastsPosted" int default 0,
-  "likesReceived" int default 0
+  "likesReceived" int default 0,
+  exp int default 0
 );
+
+alter table user_stats add column if not exists exp int;
 
 create table if not exists badges (
   id text primary key,
@@ -58,12 +61,21 @@ create table if not exists roast_comments (
   content text not null,
   type text not null,
   "mediaUrl" text,
+  transcript text,
+  "replyToCommentId" text,
+  "replyToUserId" text,
+  "replyToUserName" text,
   duration int,
   likes int default 0,
   "isChampion" boolean default false,
   "timestamp" text,
   "createdAt" timestamptz default now()
 );
+
+alter table roast_comments add column if not exists transcript text;
+alter table roast_comments add column if not exists "replyToCommentId" text;
+alter table roast_comments add column if not exists "replyToUserId" text;
+alter table roast_comments add column if not exists "replyToUserName" text;
 
 create table if not exists leaderboard_daily (
   id text primary key,
@@ -90,6 +102,18 @@ create table if not exists leaderboard_hof (
   "userAvatar" text not null
 );
 
+create table if not exists notifications (
+  id uuid primary key default gen_random_uuid(),
+  "userId" text not null,
+  "type" text not null,
+  "targetId" text,
+  "commentId" text,
+  "actorId" text,
+  "actorName" text,
+  "createdAt" timestamptz default now(),
+  "read" boolean default false
+);
+
 -- Enable RLS for all tables
 alter table app_users enable row level security;
 alter table user_stats enable row level security;
@@ -100,6 +124,7 @@ alter table roast_comments enable row level security;
 alter table leaderboard_daily enable row level security;
 alter table leaderboard_top enable row level security;
 alter table leaderboard_hof enable row level security;
+alter table notifications enable row level security;
 
 -- Minimal RLS policies
 drop policy if exists "app_users_select_own" on app_users;
@@ -129,6 +154,12 @@ create policy "badges_select_all" on badges
 drop policy if exists "user_badges_select_own" on user_badges;
 create policy "user_badges_select_own" on user_badges
   for select using (auth.uid()::text = "userId");
+drop policy if exists "user_badges_insert_own" on user_badges;
+drop policy if exists "user_badges_update_own" on user_badges;
+create policy "user_badges_insert_own" on user_badges
+  for insert with check (auth.uid()::text = "userId");
+create policy "user_badges_update_own" on user_badges
+  for update using (auth.uid()::text = "userId");
 
 drop policy if exists "roast_targets_select_all" on roast_targets;
 drop policy if exists "roast_targets_insert_auth" on roast_targets;
@@ -160,6 +191,119 @@ create policy "leaderboard_top_select_all" on leaderboard_top
 create policy "leaderboard_hof_select_all" on leaderboard_hof
   for select using (true);
 
+drop policy if exists "notifications_select_own" on notifications;
+drop policy if exists "notifications_insert_auth" on notifications;
+drop policy if exists "notifications_update_own" on notifications;
+create policy "notifications_select_own" on notifications
+  for select using (auth.uid()::text = "userId");
+create policy "notifications_insert_auth" on notifications
+  for insert with check (auth.uid() is not null);
+create policy "notifications_update_own" on notifications
+  for update using (auth.uid()::text = "userId");
+
+-- Progress helpers
+create or replace function level_from_exp(p_exp int)
+returns int
+language plpgsql
+as $$
+declare
+  level int := 1;
+  needed int := 100;
+  remaining int := greatest(p_exp, 0);
+begin
+  while remaining >= needed loop
+    remaining := remaining - needed;
+    level := level + 1;
+    needed := ceil(needed * 1.2);
+  end loop;
+  return level;
+end;
+$$;
+
+create or replace function apply_progress(
+  p_user_id text,
+  p_targets int,
+  p_roasts int,
+  p_likes_received int,
+  p_exp int
+)
+returns void
+language plpgsql
+security definer
+as $$
+declare
+  new_targets int;
+  new_roasts int;
+  new_likes int;
+  new_exp int;
+  new_level int;
+begin
+  if auth.uid()::text != p_user_id and (p_targets != 0 or p_roasts != 0) then
+    raise exception 'not allowed';
+  end if;
+
+  insert into user_stats ("userId", "targetsCreated", "roastsPosted", "likesReceived", exp)
+  values (p_user_id, 0, 0, 0, 0)
+  on conflict ("userId") do nothing;
+
+  select
+    coalesce("targetsCreated", 0) + p_targets,
+    coalesce("roastsPosted", 0) + p_roasts,
+    coalesce("likesReceived", 0) + p_likes_received,
+    coalesce(exp, 0) + p_exp
+  into new_targets, new_roasts, new_likes, new_exp
+  from user_stats
+  where "userId" = p_user_id;
+
+  update user_stats
+  set "targetsCreated" = new_targets,
+      "roastsPosted" = new_roasts,
+      "likesReceived" = new_likes,
+      exp = greatest(new_exp, 0)
+  where "userId" = p_user_id;
+
+  new_level := level_from_exp(new_exp);
+  update app_users
+  set level = greatest(new_level, 1)
+  where id = p_user_id;
+end;
+$$;
+
+grant execute on function apply_progress(text,int,int,int,int) to authenticated;
+
+-- Backfill exp/level from existing stats
+update user_stats
+set exp =
+  coalesce("targetsCreated", 0) * 30 +
+  coalesce("roastsPosted", 0) * 10 +
+  coalesce("likesReceived", 0) * 5;
+
+update app_users
+set level = level_from_exp(coalesce((select exp from user_stats where "userId" = app_users.id), 0));
+
+-- Storage for audio comments
+select storage.create_bucket('roast-audio', public => true) 
+where not exists (select 1 from storage.buckets where id = 'roast-audio');
+
+drop policy if exists "roast_audio_read" on storage.objects;
+drop policy if exists "roast_audio_write" on storage.objects;
+drop policy if exists "roast_audio_update" on storage.objects;
+create policy "roast_audio_read" on storage.objects
+  for select using (bucket_id = 'roast-audio');
+create policy "roast_audio_write" on storage.objects
+  for insert with check (bucket_id = 'roast-audio' and auth.uid() is not null);
+create policy "roast_audio_update" on storage.objects
+  for update using (bucket_id = 'roast-audio' and auth.uid() is not null);
+
+-- Public profiles view (no email)
+drop view if exists public_users;
+create view public_users as
+  select id, name, avatar, quote, level
+  from app_users;
+
+alter view public_users set (security_invoker = true);
+grant select on public_users to anon, authenticated;
+
 -- Increment likes helper
 create or replace function increment_roast_like(roast_id text)
 returns void
@@ -182,13 +326,14 @@ on conflict (id) do update set
   quote = excluded.quote,
   level = excluded.level;
 
-insert into user_stats ("userId", "targetsCreated", "roastsPosted", "likesReceived")
+insert into user_stats ("userId", "targetsCreated", "roastsPosted", "likesReceived", exp)
 values
-  ('me', 5, 124, 3500)
+  ('me', 5, 124, 3500, 0)
 on conflict ("userId") do update set
   "targetsCreated" = excluded."targetsCreated",
   "roastsPosted" = excluded."roastsPosted",
-  "likesReceived" = excluded."likesReceived";
+  "likesReceived" = excluded."likesReceived",
+  exp = excluded.exp;
 
 insert into badges (id, name, icon, description, condition)
 values

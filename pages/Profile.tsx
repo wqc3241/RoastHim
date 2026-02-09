@@ -34,6 +34,22 @@ const Profile: React.FC<Props> = ({ currentUser, sessionUserId, onNavigateToTarg
     return stats.likesReceived.toString();
   }, [stats]);
 
+  const expProgress = useMemo(() => {
+    const exp = stats?.exp ?? 0;
+    const currentLevel = user?.level ?? 1;
+    let needed = 100;
+    let level = 1;
+    let spent = 0;
+    while (level < currentLevel) {
+      spent += needed;
+      needed = Math.ceil(needed * 1.2);
+      level += 1;
+    }
+    const currentExp = Math.max(0, exp - spent);
+    const percent = Math.min(100, Math.max(0, (currentExp / needed) * 100));
+    return { percent, currentExp, needed };
+  }, [stats, user]);
+
   useEffect(() => {
     const loadProfile = async () => {
       if (!supabase || !sessionUserId) return;
@@ -90,7 +106,8 @@ const Profile: React.FC<Props> = ({ currentUser, sessionUserId, onNavigateToTarg
       setStats({
         targetsCreated: derivedTargets,
         roastsPosted: derivedRoasts,
-        likesReceived: derivedLikes
+        likesReceived: derivedLikes,
+        exp: statData?.exp ?? 0
       });
 
       if (statData) {
@@ -186,7 +203,14 @@ const Profile: React.FC<Props> = ({ currentUser, sessionUserId, onNavigateToTarg
           </button>
         )}
         <div className="relative mb-4">
-          <img src={user.avatar} className="w-24 h-24 rounded-full border-4 border-orange-500 shadow-2xl" />
+          <div
+            className="rounded-full p-[3px] shadow-2xl"
+            style={{
+              background: `conic-gradient(from 135deg, #f97316 0% ${expProgress.percent}%, #fed7aa ${expProgress.percent}% 100%)`
+            }}
+          >
+            <img src={user.avatar} className="w-24 h-24 rounded-full border-4 border-white" />
+          </div>
           <div className="absolute -bottom-2 -right-2 bg-orange-500 text-white text-[10px] font-bold px-2 py-1 rounded-full border-2 border-white">
             LV.{user.level ?? 1}
           </div>
