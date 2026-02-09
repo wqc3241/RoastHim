@@ -141,12 +141,13 @@ const App: React.FC = () => {
         level: profile.level,
         email: profile.email
       });
+      setLoadProfileError(null);
     } catch (error) {
       // Avoid forcing onboarding on transient timeouts.
       if (!currentUser) {
         setNeedsOnboarding(false);
+        setLoadProfileError('个人资料加载失败，请点击重试');
       }
-      setLoadProfileError('个人资料加载失败，请点击重试');
     } finally {
       setIsProfileLoading(false);
       isProfileLoadingRef.current = false;
