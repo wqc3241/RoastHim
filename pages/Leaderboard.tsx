@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
+import { t } from '../utils/i18n';
 
 interface LeaderboardDaily {
   id: string;
@@ -86,11 +87,11 @@ const Leaderboard: React.FC = () => {
 
   return (
     <div className="min-h-screen pb-32 px-4 pt-8">
-      <h2 className="text-3xl font-headline text-orange-600 mb-8 italic">荣誉榜 🏆</h2>
+      <h2 className="text-3xl font-headline text-orange-600 mb-8 italic">{t('leaderboard_heading')}</h2>
 
       {/* Daily Champion */}
       <section className="mb-10">
-        <h3 className="text-sm font-bold text-slate-500 mb-4 tracking-widest uppercase">今日骂王</h3>
+        <h3 className="text-sm font-bold text-slate-500 mb-4 tracking-widest uppercase">{t('leaderboard_daily')}</h3>
         <div className="glass rounded-3xl p-6 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/15 blur-3xl rounded-full -mr-10 -mt-10" />
           <div className="flex items-start gap-4 mb-4 relative z-10">
@@ -100,10 +101,10 @@ const Leaderboard: React.FC = () => {
             </div>
             <div className="flex-1">
               <h4 className="text-xl font-bold text-yellow-600">{daily.userName}</h4>
-              <p className="text-xs text-slate-500">蝉联冠军 x{daily.streak}</p>
+              <p className="text-xs text-slate-500">{t('leaderboard_streak', { count: daily.streak })}</p>
               <div className="flex items-center gap-1 mt-1">
                 <span className="text-orange-500">🔥</span>
-                <span className="text-sm font-bold text-slate-800">{daily.likes.toLocaleString()} 赞</span>
+                <span className="text-sm font-bold text-slate-800">{t('details_likes', { count: daily.likes.toLocaleString() })}</span>
               </div>
             </div>
             <div className="w-16 h-16 rounded-xl bg-white border border-slate-200 overflow-hidden">
@@ -120,10 +121,10 @@ const Leaderboard: React.FC = () => {
 
       {/* Top 10 List */}
       <section className="mb-10">
-        <h3 className="text-sm font-bold text-slate-500 mb-4 tracking-widest uppercase">今日 TOP 10</h3>
+        <h3 className="text-sm font-bold text-slate-500 mb-4 tracking-widest uppercase">{t('leaderboard_top_today')}</h3>
         <div className="space-y-4">
           {isLoading && (
-            <div className="text-sm text-slate-400">加载中...</div>
+            <div className="text-sm text-slate-400">{t('leaderboard_loading')}</div>
           )}
           {topList.map(entry => (
             <div key={entry.rank} className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-slate-200">
@@ -136,7 +137,7 @@ const Leaderboard: React.FC = () => {
                 <p className="text-[10px] text-slate-500 truncate w-40">{entry.quote}</p>
               </div>
               <div className="text-right">
-                <span className="block text-xs font-bold text-orange-600">{entry.likes.toLocaleString()} 赞</span>
+                <span className="block text-xs font-bold text-orange-600">{t('details_likes', { count: entry.likes.toLocaleString() })}</span>
               </div>
             </div>
           ))}
@@ -145,7 +146,7 @@ const Leaderboard: React.FC = () => {
 
       {/* Hall of Fame */}
       <section>
-        <h3 className="text-sm font-bold text-slate-500 mb-4 tracking-widest uppercase">名人堂</h3>
+        <h3 className="text-sm font-bold text-slate-500 mb-4 tracking-widest uppercase">{t('leaderboard_hof')}</h3>
         <div className="grid grid-cols-3 gap-4">
           {hofList.map(entry => (
             <div key={entry.id} className="flex flex-col items-center bg-white p-3 rounded-2xl border border-slate-200">

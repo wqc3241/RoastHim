@@ -5,6 +5,8 @@ import { getPersonaAvatarUrl } from '../constants';
 import { supabase } from '../supabaseClient';
 import { applyProgress, EXP_RULES, syncBadges } from '../utils/progression';
 import { containsProfanity } from '../utils/moderation';
+import { getLocale, t } from '../utils/i18n';
+import { getTypeLabel, normalizeTypeValue, TYPE_OPTIONS } from '../utils/labels';
 
 interface Props {
   onSuccess: () => void;
@@ -29,16 +31,20 @@ const Post: React.FC<Props> = ({ onSuccess, currentUser, isAuthenticated, onRequ
   const [textError, setTextError] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
 
-  const styles: { id: AvatarStyle; label: string; icon: string }[] = [
-    { id: 'suit-man', label: '西装男', icon: '👔' },
-    { id: 'casual-woman', label: '休闲女', icon: '👚' },
-    { id: 'uncle', label: '大叔', icon: '🧔' },
-    { id: 'fresh-boy', label: '小鲜肉', icon: '👦' },
-    { id: 'mature-woman', label: '御姐', icon: '💃' },
-    { id: 'mystery', label: '神秘人', icon: '👤' },
+  const isZh = getLocale() === 'zh';
+  const styleOptions: { id: AvatarStyle; zh: string; en: string; icon: string }[] = [
+    { id: 'suit-man', zh: '西装男', en: 'Suit man', icon: '👔' },
+    { id: 'casual-woman', zh: '休闲女', en: 'Casual woman', icon: '👚' },
+    { id: 'uncle', zh: '大叔', en: 'Uncle', icon: '🧔' },
+    { id: 'fresh-boy', zh: '小鲜肉', en: 'Fresh boy', icon: '👦' },
+    { id: 'mature-woman', zh: '御姐', en: 'Mature woman', icon: '💃' },
+    { id: 'mystery', zh: '神秘人', en: 'Mystery', icon: '👤' },
   ];
-
-  const typeOptions = ['领导', '同事', '前任', '室友', '甲方', '亲戚', '陌生人', '其他'];
+  const styles = styleOptions.map((s) => ({
+    id: s.id,
+    label: isZh ? s.zh : s.en,
+    icon: s.icon
+  }));
 
   useEffect(() => {
     return () => {
@@ -51,8 +57,7 @@ const Post: React.FC<Props> = ({ onSuccess, currentUser, isAuthenticated, onRequ
 
   const normalizeType = (value?: string) => {
     if (!value) return formData.type;
-    const trimmed = value.trim();
-    return typeOptions.includes(trimmed) ? trimmed : '其他';
+    return normalizeTypeValue(value);
   };
 
   const normalizeStyle = (value?: string) => {
@@ -75,7 +80,7 @@ const Post: React.FC<Props> = ({ onSuccess, currentUser, isAuthenticated, onRequ
   const handleVoiceToggle = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setAiError('当前浏览器不支持语音输入');
+      setAiError(t('post_voice_unsupported'));
       return;
     }
 
@@ -86,7 +91,7 @@ const Post: React.FC<Props> = ({ onSuccess, currentUser, isAuthenticated, onRequ
     }
 
     const recognition = new SpeechRecognition();
-    recognition.lang = 'zh-CN';
+    recognition.lang = isZh ? 'zh-CN' : 'en-US';
     recognition.continuous = true;
     recognition.interimResults = true;
 
@@ -118,16 +123,16 @@ const Post: React.FC<Props> = ({ onSuccess, currentUser, isAuthenticated, onRequ
 
   const handleGenerate = async () => {
     if (!experienceText.trim()) {
-      setAiError('请先输入经历内容');
+      setAiError(t('post_need_experience'));
       return;
     }
     if (containsProfanity(experienceText)) {
-      setTextError('经历描述包含不当用语，请修改后再生成');
+      setTextError(t('post_profanity_experience'));
       return;
     }
     const geminiKey = (process as any).env?.GEMINI_API_KEY || (process as any).env?.API_KEY;
     if (!geminiKey) {
-      setAiError('未配置 GEMINI_API_KEY');
+      setAiError(t('post_missing_gemini'));
       return;
     }
 
@@ -135,14 +140,24 @@ const Post: React.FC<Props> = ({ onSuccess, currentUser, isAuthenticated, onRequ
     setAiError(null);
     setTextError(null);
 
-    const prompt = `你是内容整理助手。根据用户描述生成结构化信息，严格输出 JSON，字段为：
+    const typeLabels = TYPE_OPTIONS.map((opt) => (isZh ? opt.zh : opt.en)).join(isZh ? '、' : ', ');
+    const prompt = isZh
+      ? `你是内容整理助手。根据用户描述生成结构化信息，严格输出 JSON，字段为：
 name, type, description, avatarStyle, tags。
 约束：
-- type 必须是以下之一：${typeOptions.join('、')}。
+- type 必须是以下之一：${typeLabels}。
 - avatarStyle 必须是以下之一：${styles.map(s => s.id).join('、')}。
 - description 用一句话概括“为什么要骂TA”（不超过 200 字）。
 - tags 是数组，最多 3 个，短词即可（如：甲方、改稿王、职场）。
-用户描述：${experienceText}`;
+用户描述：${experienceText}`
+      : `You are a content summarizer. Based on the user story, output STRICT JSON with fields:
+name, type, description, avatarStyle, tags.
+Constraints:
+- type must be one of: ${typeLabels}.
+- avatarStyle must be one of: ${styles.map(s => s.id).join(', ')}.
+- description is one sentence for why to roast (<= 200 chars).
+- tags is an array, up to 3 short words (e.g. client, late, office).
+User description: ${experienceText}`;
 
     try {
       const model = 'gemini-3-flash-preview';
@@ -167,7 +182,7 @@ name, type, description, avatarStyle, tags。
       const text = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') ?? '';
       const jsonText = text.match(/\{[\s\S]*\}/)?.[0];
       if (!jsonText) {
-        throw new Error('解析失败');
+        throw new Error(t('post_parse_failed'));
       }
       const parsed = JSON.parse(jsonText);
 
@@ -181,7 +196,7 @@ name, type, description, avatarStyle, tags。
       }));
       setStep(2);
     } catch (error: any) {
-      setAiError(`生成失败，请重试 (${error?.message || 'unknown'})`);
+      setAiError(`${t('post_generate_failed')} (${error?.message || 'unknown'})`);
     } finally {
       setIsGenerating(false);
     }
@@ -195,7 +210,7 @@ name, type, description, avatarStyle, tags。
       containsProfanity(formData.description) ||
       containsProfanity(formData.tags.join(' '))
     ) {
-      setTextError('内容包含不当用语，请修改后再提交');
+      setTextError(t('post_error_profanity'));
       return;
     }
     const newTarget: RoastTarget = {
@@ -232,16 +247,16 @@ name, type, description, avatarStyle, tags。
 
   return (
     <div className="min-h-screen pb-32 px-6 pt-10">
-      <h2 className="text-3xl font-headline text-orange-600 mb-8 italic">投稿新对象 🔥</h2>
+      <h2 className="text-3xl font-headline text-orange-600 mb-8 italic">{t('post_heading')}</h2>
 
       {!isAuthenticated && (
         <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center">
-          <p className="text-sm text-slate-600 mb-4">登录后才能投稿</p>
+          <p className="text-sm text-slate-600 mb-4">{t('post_login_required')}</p>
           <button
             onClick={() => onRequireLogin?.()}
             className="px-4 py-2 rounded-full bg-orange-500 text-white font-bold text-sm"
           >
-            去登录
+            {t('post_login_cta')}
           </button>
         </div>
       )}
@@ -250,10 +265,10 @@ name, type, description, avatarStyle, tags。
         <>
         {step === 1 && (
         <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-6">
-          <label className="block text-sm font-bold text-slate-500 mb-2">经历描述（可语音输入）</label>
+          <label className="block text-sm font-bold text-slate-500 mb-2">{t('post_experience_label')}</label>
           <textarea
             rows={6}
-            placeholder="描述一下你和TA的经历，越具体越好..."
+            placeholder={t('post_experience_placeholder')}
             className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-orange-500 text-sm"
             value={experienceText}
             maxLength={2000}
@@ -267,7 +282,7 @@ name, type, description, avatarStyle, tags。
                 isRecording ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-slate-600 border-slate-200'
               }`}
             >
-              {isRecording ? '停止录音' : '语音输入'}
+              {isRecording ? t('post_voice_stop') : t('post_voice_input')}
             </button>
             <button
               type="button"
@@ -275,12 +290,12 @@ name, type, description, avatarStyle, tags。
               disabled={isGenerating}
               className="px-4 py-2 rounded-lg text-xs font-bold bg-slate-900 text-white disabled:opacity-60"
             >
-              {isGenerating ? '生成中...' : '用 AI 生成'}
+              {isGenerating ? t('post_loading') : t('post_generate_ai')}
             </button>
           </div>
           {aiError && <p className="text-xs text-red-500 mt-2">{aiError}</p>}
           {textError && <p className="text-xs text-red-500 mt-2">{textError}</p>}
-          <p className="text-[10px] text-slate-400 mt-2">点击生成后进入下一步</p>
+          <p className="text-[10px] text-slate-400 mt-2">{t('post_next_hint')}</p>
         </div>
       )}
 
@@ -292,7 +307,7 @@ name, type, description, avatarStyle, tags。
               onClick={() => setStep(1)}
               className="text-xs text-slate-500 border border-slate-200 rounded-full px-3 py-1"
             >
-              返回修改经历
+              {t('post_back_edit')}
             </button>
             <button
               type="button"
@@ -300,15 +315,15 @@ name, type, description, avatarStyle, tags。
               disabled={isGenerating}
               className="text-xs text-white bg-slate-900 rounded-full px-3 py-1 disabled:opacity-60"
             >
-              {isGenerating ? '生成中...' : '重新生成'}
+              {isGenerating ? t('post_loading') : t('post_regen')}
             </button>
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-slate-500 mb-2">TA的昵称 (必填)</label>
+            <label className="block text-sm font-bold text-slate-500 mb-2">{t('post_name_label')}</label>
             <input 
               required
-              placeholder="例如：奇葩领导老王"
+              placeholder={t('post_name_placeholder')}
               className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-orange-500"
               value={formData.name}
               onChange={e => setFormData({...formData, name: e.target.value})}
@@ -316,29 +331,29 @@ name, type, description, avatarStyle, tags。
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-slate-500 mb-2">关系/类型</label>
+            <label className="block text-sm font-bold text-slate-500 mb-2">{t('post_type_label')}</label>
             <div className="grid grid-cols-3 gap-2">
-              {typeOptions.map(t => (
+              {TYPE_OPTIONS.map((option) => (
                 <button
-                  key={t}
+                  key={option.value}
                   type="button"
-                  onClick={() => setFormData({...formData, type: t})}
+                  onClick={() => setFormData({ ...formData, type: option.value })}
                   className={`py-2 rounded-lg text-xs font-bold transition-all border ${
-                    formData.type === t ? 'bg-orange-500 border-orange-500 text-white' : 'bg-white border-slate-200 text-slate-500'
+                    formData.type === option.value ? 'bg-orange-500 border-orange-500 text-white' : 'bg-white border-slate-200 text-slate-500'
                   }`}
                 >
-                  {t}
+                  {getTypeLabel(option.value)}
                 </button>
               ))}
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-slate-500 mb-2">为什么要骂TA？ (必填)</label>
+            <label className="block text-sm font-bold text-slate-500 mb-2">{t('post_desc_label')}</label>
             <textarea 
               required
               rows={4}
-              placeholder="描述一下TA做过的那些奇葩事..."
+              placeholder={t('post_desc_placeholder')}
               className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-orange-500 text-sm"
               value={formData.description}
               onChange={e => setFormData({...formData, description: e.target.value})}
@@ -346,9 +361,9 @@ name, type, description, avatarStyle, tags。
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-slate-500 mb-2">标签（最多3个，用逗号分隔）</label>
+            <label className="block text-sm font-bold text-slate-500 mb-2">{t('post_tags_label')}</label>
             <input
-              placeholder="#职场,#改稿王,#甲方"
+              placeholder={t('post_tags_placeholder')}
               className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-orange-500 text-sm"
               value={formData.tags.join(',')}
               onChange={(e) =>
@@ -358,7 +373,7 @@ name, type, description, avatarStyle, tags。
           </div>
 
           <div>
-            <label className="block text-sm font-bold text-slate-500 mb-2">头像风格</label>
+            <label className="block text-sm font-bold text-slate-500 mb-2">{t('post_style_label')}</label>
             <div className="grid grid-cols-3 gap-3">
               {styles.map(s => (
                 <button
@@ -380,7 +395,7 @@ name, type, description, avatarStyle, tags。
             type="submit"
             className="w-full bg-orange-500 py-4 rounded-full font-bold text-xl text-white shadow-[0_10px_30px_rgba(255,107,53,0.3)] active:scale-95 transition-all mt-4"
           >
-            立即提交 🚀
+            {t('post_submit_now')}
           </button>
           {textError && <p className="text-xs text-red-500">{textError}</p>}
         </form>

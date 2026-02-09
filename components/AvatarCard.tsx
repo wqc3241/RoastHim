@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { RoastTarget } from '../types';
+import { t } from '../utils/i18n';
 
 interface Props {
   target: RoastTarget;
@@ -27,7 +28,7 @@ const AvatarCard: React.FC<Props> = ({ target, onClick }) => {
       <div className="p-4">
         <div className="flex justify-between items-start mb-2">
           <h3 className="text-lg font-bold truncate text-slate-900">{target.name}</h3>
-          <span className="text-xs text-slate-400">{target.roastCount} 次被骂</span>
+          <span className="text-xs text-slate-400">{t('profile_target_roasts', { count: target.roastCount })}</span>
         </div>
         <div className="flex flex-wrap gap-1 mb-3">
           {target.tags.map(tag => (
@@ -38,7 +39,7 @@ const AvatarCard: React.FC<Props> = ({ target, onClick }) => {
         </div>
         <div className="bg-slate-50 p-2 rounded-lg border-l-2 border-orange-500">
           <p className="text-xs text-slate-600 italic line-clamp-2">
-            {target.topRoastPreview ? `“${target.topRoastPreview}”` : '还没人骂TA，快来当第一个！'}
+            {target.topRoastPreview ? `“${target.topRoastPreview}”` : t('home_top_roast_empty')}
           </p>
         </div>
       </div>

@@ -13,6 +13,7 @@ import Onboarding from './pages/Onboarding';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { Analytics } from '@vercel/analytics/react';
 import Messages from './pages/Messages';
+import { t } from './utils/i18n';
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>(Page.HOME);
@@ -25,6 +26,7 @@ const App: React.FC = () => {
   const [loadProfileError, setLoadProfileError] = useState<string | null>(null);
   const isProfileLoadingRef = useRef(false);
   const [showLogin, setShowLogin] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
 
   useEffect(() => {
     if (!supabase) {
@@ -71,6 +73,18 @@ const App: React.FC = () => {
     return () => {
       sub.subscription.unsubscribe();
     };
+  }, []);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(min-width: 1024px)');
+    const handleChange = () => setIsDesktop(mediaQuery.matches);
+    handleChange();
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+    }
+    mediaQuery.addListener(handleChange);
+    return () => mediaQuery.removeListener(handleChange);
   }, []);
 
   const loadProfile = async (user?: { id: string; email?: string | null; user_metadata?: any }) => {
@@ -146,7 +160,7 @@ const App: React.FC = () => {
       // Avoid forcing onboarding on transient timeouts.
       if (!currentUser) {
         setNeedsOnboarding(false);
-        setLoadProfileError('个人资料加载失败，请点击重试');
+        setLoadProfileError(t('app_profile_load_failed'));
       }
     } finally {
       setIsProfileLoading(false);
@@ -170,7 +184,13 @@ const App: React.FC = () => {
   const renderPage = () => {
     switch (currentPage) {
       case Page.HOME:
-        return <Home onSelectTarget={navigateToDetails} isAuthenticated={!!sessionUserId} />;
+        return (
+          <Home
+            onSelectTarget={navigateToDetails}
+            isAuthenticated={!!sessionUserId}
+            isDesktop={isDesktop}
+          />
+        );
       case Page.DETAILS:
         return selectedTarget ? (
           <Details
@@ -180,7 +200,13 @@ const App: React.FC = () => {
             isAuthenticated={!!sessionUserId}
             onRequireLogin={() => setShowLogin(true)}
           />
-        ) : <Home onSelectTarget={navigateToDetails} isAuthenticated={!!sessionUserId} />;
+        ) : (
+          <Home
+            onSelectTarget={navigateToDetails}
+            isAuthenticated={!!sessionUserId}
+            isDesktop={isDesktop}
+          />
+        );
       case Page.POST:
         return (
           <Post
@@ -210,75 +236,107 @@ const App: React.FC = () => {
           />
         );
       default:
-        return <Home onSelectTarget={navigateToDetails} />;
+        return <Home onSelectTarget={navigateToDetails} isDesktop={isDesktop} />;
     }
   };
 
   const canRenderApp = !!supabase && (!needsOnboarding || !!sessionUserId);
 
   return (
-    <div className="max-w-md mx-auto relative bg-slate-50 shadow-xl min-h-screen overflow-x-hidden no-scrollbar">
-      {!isAuthReady && (
-        <div className="flex items-center justify-center h-screen text-slate-400 text-sm">加载中...</div>
-      )}
-      {isAuthReady && !supabase && (
-        <div className="flex items-center justify-center h-screen text-slate-400 text-sm">
-          未配置 Supabase
-        </div>
-      )}
-      {isAuthReady && supabase && sessionUserId && needsOnboarding && (
-        <Onboarding
-          sessionUserId={sessionUserId}
-          onComplete={(user) => {
-            setCurrentUser(user);
-            setNeedsOnboarding(false);
-          }}
-        />
-      )}
-      {isAuthReady && supabase && !needsOnboarding && renderPage()}
-      
-      {currentPage !== Page.DETAILS && isAuthReady && !needsOnboarding && (
-        <NavBar
-          currentPage={currentPage}
-          onPageChange={setCurrentPage}
-          isAuthenticated={!!sessionUserId}
-          onRequireLogin={() => setShowLogin(true)}
-        />
-      )}
-
-      {isProfileLoading && (
-        <div className="fixed inset-0 bg-white/60 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="h-10 w-10 rounded-full border-4 border-orange-200 border-t-orange-500 animate-spin" />
-        </div>
-      )}
-
-      {loadProfileError && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-white border border-slate-200 shadow-sm rounded-full px-4 py-2 text-xs text-slate-600 flex items-center gap-3">
-          <span>{loadProfileError}</span>
-          <button
-            onClick={handleRetryProfile}
-            className="text-orange-600 font-bold"
+    <div className="min-h-screen bg-slate-50">
+      <div className={`mx-auto min-h-screen ${isDesktop ? 'max-w-6xl px-6 py-6' : 'max-w-md'}`}>
+        <div className={isDesktop ? 'grid grid-cols-[220px_minmax(0,1fr)] gap-6' : ''}>
+          {isDesktop && isAuthReady && !needsOnboarding && (
+            <NavBar
+              currentPage={currentPage}
+              onPageChange={setCurrentPage}
+              isAuthenticated={!!sessionUserId}
+              onRequireLogin={() => setShowLogin(true)}
+              variant="desktop"
+            />
+          )}
+          <div
+            className={`relative min-h-screen overflow-x-hidden no-scrollbar ${
+              isDesktop
+                ? 'bg-white/70 backdrop-blur-md rounded-3xl shadow-xl border border-slate-200'
+                : 'bg-slate-50 shadow-xl'
+            }`}
           >
-            重试
-          </button>
-        </div>
-      )}
+            {!isAuthReady && (
+              <div
+                className={`flex items-center justify-center text-slate-400 text-sm ${
+                  isDesktop ? 'min-h-[70vh]' : 'h-screen'
+                }`}
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <div className="h-10 w-10 rounded-full border-4 border-orange-200 border-t-orange-500 animate-spin" />
+                  <div className="bg-white/80 border border-slate-200 rounded-full px-4 py-1">
+                    {t('app_loading')}
+                  </div>
+                </div>
+              </div>
+            )}
+            {isAuthReady && !supabase && (
+              <div className="flex items-center justify-center h-screen text-slate-400 text-sm">
+                {t('app_supabase_missing')}
+              </div>
+            )}
+            {isAuthReady && supabase && sessionUserId && needsOnboarding && (
+              <Onboarding
+                sessionUserId={sessionUserId}
+                onComplete={(user) => {
+                  setCurrentUser(user);
+                  setNeedsOnboarding(false);
+                }}
+              />
+            )}
+            {isAuthReady && supabase && !needsOnboarding && renderPage()}
 
-      {showLogin && !sessionUserId && (
-        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 overflow-auto">
-          <div className="absolute top-4 right-4">
-            <button
-              onClick={() => setShowLogin(false)}
-              className="text-xs text-slate-500 border border-slate-200 rounded-full px-3 py-1"
-            >
-              关闭
-            </button>
+            {!isDesktop && currentPage !== Page.DETAILS && isAuthReady && !needsOnboarding && (
+              <NavBar
+                currentPage={currentPage}
+                onPageChange={setCurrentPage}
+                isAuthenticated={!!sessionUserId}
+                onRequireLogin={() => setShowLogin(true)}
+              />
+            )}
+
+            {isProfileLoading && (
+              <div className="fixed inset-0 bg-white/60 backdrop-blur-sm z-50 flex items-center justify-center">
+                <div className="h-10 w-10 rounded-full border-4 border-orange-200 border-t-orange-500 animate-spin" />
+              </div>
+            )}
+
+            {loadProfileError && (
+              <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-white border border-slate-200 shadow-sm rounded-full px-4 py-2 text-xs text-slate-600 flex items-center gap-3">
+                <span>{loadProfileError}</span>
+                <button
+                  onClick={handleRetryProfile}
+                  className="text-orange-600 font-bold"
+                >
+                  {t('app_retry')}
+                </button>
+              </div>
+            )}
+
+            {showLogin && !sessionUserId && (
+              <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 overflow-auto">
+                <div className="absolute top-4 right-4">
+                  <button
+                    onClick={() => setShowLogin(false)}
+                    className="text-xs text-slate-500 border border-slate-200 rounded-full px-3 py-1"
+                  >
+                    {t('app_close')}
+                  </button>
+                </div>
+                <Login />
+              </div>
+            )}
+            <SpeedInsights />
+            <Analytics />
           </div>
-          <Login />
         </div>
-      )}
-      <SpeedInsights />
-      <Analytics />
+      </div>
     </div>
   );
 };

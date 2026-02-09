@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AppUser } from '../types';
 import { supabase } from '../supabaseClient';
+import { t } from '../utils/i18n';
 
 interface Props {
   sessionUserId: string;
@@ -19,8 +20,8 @@ const Onboarding: React.FC<Props> = ({ sessionUserId, onComplete }) => {
     setIsLoading(true);
     setError(null);
 
-    const fallbackName = name.trim() || '毒舌小王子';
-    const fallbackQuote = quote.trim() || '“键盘在手，天下我有。吐槽不息，战斗不止。”';
+    const fallbackName = name.trim() || t('onboarding_name_placeholder');
+    const fallbackQuote = quote.trim() || `“${t('onboarding_quote_placeholder')}”`;
     const avatar = `https://api.dicebear.com/7.x/personas/png?seed=${encodeURIComponent(fallbackName)}&size=200`;
 
     const { data: authData } = await supabase.auth.getUser();
@@ -50,7 +51,7 @@ const Onboarding: React.FC<Props> = ({ sessionUserId, onComplete }) => {
       .maybeSingle();
 
     if (profileError || !profile) {
-      setError('保存失败，请重试');
+      setError(t('onboarding_save_failed'));
       setIsLoading(false);
       return;
     }
@@ -70,21 +71,21 @@ const Onboarding: React.FC<Props> = ({ sessionUserId, onComplete }) => {
 
   return (
     <div className="min-h-screen px-6 pt-16 pb-24 flex flex-col items-center">
-      <h1 className="text-2xl font-headline text-orange-600 mb-2 italic">完善你的资料</h1>
-      <p className="text-sm text-slate-500 mb-8">首次登录请设置昵称和描述</p>
+      <h1 className="text-2xl font-headline text-orange-600 mb-2 italic">{t('onboarding_title')}</h1>
+      <p className="text-sm text-slate-500 mb-8">{t('onboarding_subtitle')}</p>
 
       <div className="w-full bg-white rounded-3xl p-6 border border-slate-200 shadow-sm">
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="text"
-            placeholder="用户昵称（如：毒舌小王子）"
+            placeholder={`${t('onboarding_name')} (${t('onboarding_name_placeholder')})`}
             className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-orange-500"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
           <textarea
             rows={3}
-            placeholder="用户描述（如：键盘在手，天下我有。吐槽不息，战斗不止。）"
+            placeholder={`${t('onboarding_quote')} (${t('onboarding_quote_placeholder')})`}
             className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-orange-500"
             value={quote}
             onChange={(e) => setQuote(e.target.value)}
@@ -94,7 +95,7 @@ const Onboarding: React.FC<Props> = ({ sessionUserId, onComplete }) => {
             disabled={isLoading}
             className="w-full bg-orange-500 text-white font-bold py-3 rounded-xl shadow-[0_10px_30px_rgba(255,107,53,0.3)] disabled:opacity-60"
           >
-            保存并进入
+            {t('onboarding_submit')}
           </button>
         </form>
 

@@ -339,9 +339,45 @@ on conflict (id) do update set
   quote = excluded.quote,
   level = excluded.level;
 
+insert into app_users (id, name, avatar, quote, level)
+values
+  ('seed_en_01', 'Alex Carter', 'https://api.dicebear.com/7.x/personas/png?seed=Alex%20Carter&size=200', 'Clear words, sharper roasts.', 1),
+  ('seed_en_02', 'Maya Brooks', 'https://api.dicebear.com/7.x/personas/png?seed=Maya%20Brooks&size=200', 'Deadline? I heard drama line.', 1),
+  ('seed_en_03', 'Ethan Cole', 'https://api.dicebear.com/7.x/personas/png?seed=Ethan%20Cole&size=200', 'I roast, therefore I am.', 1),
+  ('seed_en_04', 'Sofia Lane', 'https://api.dicebear.com/7.x/personas/png?seed=Sofia%20Lane&size=200', 'Small talk, big takes.', 1),
+  ('seed_en_05', 'Noah Reed', 'https://api.dicebear.com/7.x/personas/png?seed=Noah%20Reed&size=200', 'Cool head, hot roasts.', 1),
+  ('seed_en_06', 'Ava Stone', 'https://api.dicebear.com/7.x/personas/png?seed=Ava%20Stone&size=200', 'I call it like I see it.', 1),
+  ('seed_en_07', 'Lucas Gray', 'https://api.dicebear.com/7.x/personas/png?seed=Lucas%20Gray&size=200', 'Sarcasm is my cardio.', 1),
+  ('seed_en_08', 'Mia King', 'https://api.dicebear.com/7.x/personas/png?seed=Mia%20King&size=200', 'Truth, but make it spicy.', 1),
+  ('seed_en_09', 'James Park', 'https://api.dicebear.com/7.x/personas/png?seed=James%20Park&size=200', 'Snappy lines, sharp minds.', 1),
+  ('seed_en_10', 'Zoe Quinn', 'https://api.dicebear.com/7.x/personas/png?seed=Zoe%20Quinn&size=200', 'Keep it short, keep it savage.', 1)
+on conflict (id) do update set
+  name = excluded.name,
+  avatar = excluded.avatar,
+  quote = excluded.quote,
+  level = excluded.level;
+
 insert into user_stats ("userId", "targetsCreated", "roastsPosted", "likesReceived", exp)
 values
   ('me', 5, 124, 3500, 0)
+on conflict ("userId") do update set
+  "targetsCreated" = excluded."targetsCreated",
+  "roastsPosted" = excluded."roastsPosted",
+  "likesReceived" = excluded."likesReceived",
+  exp = excluded.exp;
+
+insert into user_stats ("userId", "targetsCreated", "roastsPosted", "likesReceived", exp)
+values
+  ('seed_en_01', 0, 0, 0, 0),
+  ('seed_en_02', 0, 0, 0, 0),
+  ('seed_en_03', 0, 0, 0, 0),
+  ('seed_en_04', 0, 0, 0, 0),
+  ('seed_en_05', 0, 0, 0, 0),
+  ('seed_en_06', 0, 0, 0, 0),
+  ('seed_en_07', 0, 0, 0, 0),
+  ('seed_en_08', 0, 0, 0, 0),
+  ('seed_en_09', 0, 0, 0, 0),
+  ('seed_en_10', 0, 0, 0, 0)
 on conflict ("userId") do update set
   "targetsCreated" = excluded."targetsCreated",
   "roastsPosted" = excluded."roastsPosted",
@@ -399,7 +435,37 @@ values
    '他是教你健身还是教你理财？', 'u6'),
   ('7', '甲方周总', '甲方', '需求天天变，反馈永远晚，喜欢让人猜心思。',
    ARRAY['#甲方', '#改稿王', '#职场'], 'suit-man', null, 60, 320, 40,
-   '他要的是灵感，不是方案。', 'me')
+   '他要的是灵感，不是方案。', 'me'),
+  ('en_1', 'Project Manager Sam', 'Boss', 'Turns every standup into a TED talk and still misses the deadline.',
+   ARRAY['#manager', '#deadlines', '#meetings'], 'suit-man', null, 0, 0, 10,
+   'He schedules time to decide on time.', 'seed_en_01'),
+  ('en_2', 'Roommate Chris', 'Roommate', 'Leaves dishes “to soak” for three days and calls it a system.',
+   ARRAY['#roommate', '#chores', '#messy'], 'uncle', null, 0, 0, 8,
+   'The sink is not a museum exhibit.', 'seed_en_02'),
+  ('en_3', 'Client Taylor', 'Client', 'Changes the brief daily and insists the first draft was perfect.',
+   ARRAY['#client', '#scope', '#work'], 'suit-man', null, 0, 0, 12,
+   'The brief is a moving target with rocket boots.', 'seed_en_03'),
+  ('en_4', 'Ex Jamie', 'Ex', 'Sends “u up?” at 2 AM and calls it closure.',
+   ARRAY['#ex', '#ghosting', '#late-night'], 'fresh-boy', null, 0, 0, 6,
+   'Closure is not a notification.', 'seed_en_04'),
+  ('en_5', 'Neighbor Pat', 'Other', 'Blasts karaoke every weekend and thinks thin walls are a myth.',
+   ARRAY['#neighbor', '#noise', '#karaoke'], 'mystery', null, 0, 0, 5,
+   'My walls now know the chorus by heart.', 'seed_en_05'),
+  ('en_6', 'Team Lead Morgan', 'Boss', 'Says “quick sync” and books a 90-minute meeting.',
+   ARRAY['#lead', '#meetings', '#time'], 'mature-woman', null, 0, 0, 9,
+   'Quick sync, long regret.', 'seed_en_06'),
+  ('en_7', 'Gym Coach Riley', 'Stranger', 'Upsells six plans and still can’t count reps.',
+   ARRAY['#gym', '#upsell', '#coach'], 'suit-man', null, 0, 0, 4,
+   'He counts money faster than reps.', 'seed_en_07'),
+  ('en_8', 'Cousin Jordan', 'Relative', 'Borrowed my charger in 2019 and calls it a long-term lease.',
+   ARRAY['#family', '#borrowed', '#charger'], 'mystery', null, 0, 0, 7,
+   'It’s not a lease, it’s theft.', 'seed_en_08'),
+  ('en_9', 'Coworker Casey', 'Coworker', 'Answers every question with “per my last email.”',
+   ARRAY['#coworker', '#email', '#sass'], 'casual-woman', null, 0, 0, 11,
+   'Your last email was a cliffhanger.', 'seed_en_09'),
+  ('en_10', 'Roommate Alex', 'Roommate', 'Microwaves fish at midnight and acts surprised by the smell.',
+   ARRAY['#roommate', '#midnight', '#smell'], 'uncle', null, 0, 0, 8,
+   'Some smells are not nocturnal.', 'seed_en_10')
 on conflict (id) do update set
   name = excluded.name,
   type = excluded.type,

@@ -4,6 +4,7 @@ import { AppUser, RoastTarget, RoastComment, RoastType } from '../types';
 import { supabase } from '../supabaseClient';
 import { applyProgress, EXP_RULES, syncBadges } from '../utils/progression';
 import { containsProfanity } from '../utils/moderation';
+import { t } from '../utils/i18n';
 
 interface Props {
   target: RoastTarget;
@@ -176,7 +177,7 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
     if (!inputText.trim()) return;
     if (!currentUser) return;
     if (containsProfanity(inputText)) {
-      setTextError('内容包含不当用语，请修改后再发送');
+      setTextError(t('details_text_profanity'));
       return;
     }
     const replyTarget = replyingTo;
@@ -190,7 +191,7 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
       type: 'text',
       likes: 0,
       isChampion: false,
-      timestamp: '刚刚',
+      timestamp: t('messages_just_now'),
       replyToCommentId: replyTarget?.id,
       replyToUserId: replyTarget?.userId,
       replyToUserName: replyTarget?.userName
@@ -208,11 +209,11 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
     }
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      setAudioError('当前浏览器不支持语音识别');
+      setAudioError(t('details_audio_unsupported'));
       return;
     }
     if (!window.MediaRecorder) {
-      setAudioError('当前浏览器不支持语音录制');
+      setAudioError(t('details_audio_unsupported'));
       return;
     }
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -243,7 +244,8 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
     setIsRecording(true);
 
     const recognition = new SpeechRecognition();
-    recognition.lang = 'zh-CN';
+    const isZh = typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith('zh');
+    recognition.lang = isZh ? 'zh-CN' : 'en-US';
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.onresult = (event: any) => {
@@ -272,11 +274,11 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
   const handleSendAudio = async () => {
     if (!audioBlob || !currentUser || !supabase) return;
     if (audioBlob.size === 0) {
-      setAudioError('录音为空，请重新录制');
+      setAudioError(t('details_audio_empty'));
       return;
     }
     if (audioTranscript && containsProfanity(audioTranscript)) {
-      setAudioError('转文字包含不当用语，请修改后再发送');
+      setAudioError(t('details_transcript_profanity'));
       return;
     }
     const roastId = Date.now().toString();
@@ -288,7 +290,7 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
       .from('roast-audio')
       .upload(path, file, { upsert: true, contentType: file.type });
     if (error) {
-      setAudioError('语音上传失败，请重试');
+      setAudioError(t('details_audio_upload_failed'));
       return;
     }
 
@@ -302,13 +304,13 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
       userId: currentUser.id,
       userName: currentUser.name,
       userAvatar: currentUser.avatar,
-      content: audioTranscript || '语音评论',
+      content: audioTranscript || t('details_audio_comment_label'),
       type: 'audio',
       mediaUrl: publicUrl.publicUrl,
       transcript: audioTranscript,
       likes: 0,
       isChampion: false,
-      timestamp: '刚刚',
+      timestamp: t('messages_just_now'),
       replyToCommentId: replyingTo?.id,
       replyToUserId: replyingTo?.userId,
       replyToUserName: replyingTo?.userName
@@ -498,8 +500,8 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
             {target.description}
           </p>
           <div className="flex gap-4 text-xs font-bold text-orange-600">
-            <span>{targetStats.roastCount} 次被骂</span>
-            <span>{targetStats.totalLikes} 累计获赞</span>
+            <span>{t('details_roasts', { count: targetStats.roastCount })}</span>
+            <span>{t('details_total_likes', { count: targetStats.totalLikes })}</span>
           </div>
         </div>
       </div>
@@ -507,19 +509,19 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
       {/* Roasts Feed */}
       <div className="px-4 py-6">
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-bold">评论区 ({roasts.length})</h3>
+          <h3 className="text-xl font-bold">{t('details_comments_title', { count: roasts.length })}</h3>
           <div className="flex bg-slate-100 rounded-full p-1">
             <button 
               onClick={() => setSort('hot')}
               className={`px-4 py-1 rounded-full text-xs font-bold transition-all ${sort === 'hot' ? 'bg-orange-500 text-white' : 'text-slate-500'}`}
             >
-              最热
+              {t('details_sort_hot')}
             </button>
             <button 
               onClick={() => setSort('new')}
               className={`px-4 py-1 rounded-full text-xs font-bold transition-all ${sort === 'new' ? 'bg-orange-500 text-white' : 'text-slate-500'}`}
             >
-              最新
+              {t('details_sort_new')}
             </button>
           </div>
         </div>
@@ -527,17 +529,17 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
         <div className="space-y-6">
           {!isAuthenticated && (
             <div className="bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-500">
-              需要登录后才能发表评论和点赞。
+              {t('details_login_required_comment')}
               <button
                 onClick={() => onRequireLogin?.()}
                 className="ml-2 text-orange-600 font-bold"
               >
-                去登录
+                {t('details_login_cta')}
               </button>
             </div>
           )}
           {isLoading && (
-            <div className="text-sm text-slate-400">加载中...</div>
+            <div className="text-sm text-slate-400">{t('app_loading')}</div>
           )}
           {mainComments.map(roast => {
             const replies = replyMap[roast.id] || [];
@@ -569,7 +571,7 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
                     </div>
                     {roast.replyToUserName && (
                       <div className="text-xs text-slate-500 mb-1">
-                        回复 <span className="text-orange-600 font-bold">@{roast.replyToUserName}</span>
+                        {t('details_reply')} <span className="text-orange-600 font-bold">@{roast.replyToUserName}</span>
                       </div>
                     )}
                     <p className="text-slate-700 text-sm leading-relaxed mb-3">
@@ -588,11 +590,11 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
                           onClick={() => toggleTranscript(roast.id)}
                           className="mt-2 text-xs text-orange-600 font-bold"
                         >
-                          转文字
+                          {t('details_audio_transcript')}
                         </button>
                         {showTranscriptIds.has(roast.id) && (
                           <div className="text-xs text-slate-500 mt-1">
-                            {roast.transcript ? roast.transcript : '暂无转文字'}
+                            {roast.transcript ? roast.transcript : t('details_audio_transcript_empty')}
                           </div>
                         )}
                       </div>
@@ -616,7 +618,7 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
                         }}
                         className="text-xs text-slate-500"
                       >
-                        回复
+                        {t('details_reply')}
                       </button>
                     </div>
 
@@ -628,7 +630,7 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
                               <span className="text-orange-600 font-bold">{reply.userName}</span>
                               {reply.replyToUserName && (
                                 <>
-                                  {' '}回复{' '}
+                                  {' '}{t('details_reply')}{' '}
                                   <span className="text-orange-600 font-bold">@{reply.replyToUserName}</span>
                                 </>
                               )}
@@ -641,7 +643,9 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
                             onClick={() => toggleReplies(roast.id)}
                             className="text-[11px] text-orange-600 font-bold"
                           >
-                            {isExpanded ? '收起回复' : `查看其余${replies.length - 1}条回复`}
+                            {isExpanded
+                              ? t('details_reply_hide')
+                              : t('details_reply_more_count', { count: replies.length - 1 })}
                           </button>
                         )}
                       </div>
@@ -658,12 +662,12 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
       <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-slate-200 p-4 pb-8 flex items-center gap-3">
         {replyingTo && (
           <div className="absolute -top-10 left-4 right-4 bg-white border border-slate-200 rounded-full px-3 py-1 text-xs text-slate-600 flex items-center justify-between">
-            <span>回复 @{replyingTo.userName}</span>
+            <span>{t('details_reply_prefix', { name: replyingTo.userName })}</span>
             <button
               onClick={() => setReplyingTo(null)}
               className="text-slate-400"
             >
-              取消
+              {t('details_reply_cancel')}
             </button>
           </div>
         )}
@@ -683,8 +687,10 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder={
               isAuthenticated
-                ? (replyingTo ? `回复 @${replyingTo.userName}` : '用最犀利的话骂他...')
-                : '登录后才能发表评论'
+                ? (replyingTo
+                  ? t('details_reply_prefix', { name: replyingTo.userName })
+                  : t('details_comment_placeholder_strong'))
+                : t('details_send_login_only')
             }
             className="w-full bg-white border border-slate-200 rounded-full px-4 py-2.5 text-sm focus:outline-none focus:border-orange-500/50"
             disabled={!isAuthenticated}
@@ -704,7 +710,7 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
           }}
           className="bg-orange-500 text-white font-bold px-5 py-2.5 rounded-full text-sm shadow-lg shadow-orange-500/20 active:scale-95 transition-all"
         >
-          发送
+          {t('details_send')}
         </button>
       </div>
       {textError && (
@@ -715,18 +721,18 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
 
       {audioPreviewUrl && (
         <div className="fixed bottom-20 left-4 right-4 bg-white border border-slate-200 rounded-2xl p-3 z-40">
-          <div className="text-xs text-slate-500 mb-2">语音预览</div>
+          <div className="text-xs text-slate-500 mb-2">{t('details_audio_preview')}</div>
           <audio controls className="w-full">
             <source src={audioPreviewUrl} />
           </audio>
           <input
-            placeholder="可选：转文字内容"
+            placeholder={t('details_audio_transcript_placeholder')}
             className="mt-2 w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-orange-500"
             value={audioTranscript}
             onChange={(e) => setAudioTranscript(e.target.value)}
           />
           {isRecognizing && (
-            <div className="text-[10px] text-slate-400 mt-2">语音识别中…</div>
+            <div className="text-[10px] text-slate-400 mt-2">{t('details_audio_transcribing')}</div>
           )}
           {audioError && (
             <div className="text-[10px] text-red-500 mt-2">{audioError}</div>
@@ -741,10 +747,10 @@ const Details: React.FC<Props> = ({ target, onBack, currentUser, isAuthenticated
               onClick={() => setIsProfileModalOpen(false)}
               className="absolute right-3 top-3 text-slate-400 text-xs"
             >
-              关闭
+              {t('app_close')}
             </button>
             {profileLoading && (
-              <div className="text-sm text-slate-400">加载中...</div>
+              <div className="text-sm text-slate-400">{t('app_loading')}</div>
             )}
             {!profileLoading && profileUser && (
               <div className="flex flex-col items-center text-center gap-3">

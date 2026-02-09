@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { AppUser, RoastTarget } from '../types';
 import { supabase } from '../supabaseClient';
+import { t } from '../utils/i18n';
 
 interface Props {
   currentUser: AppUser | null;
@@ -61,10 +62,10 @@ const Messages: React.FC<Props> = ({ currentUser, onNavigateToTarget }) => {
 
   return (
     <div className="min-h-screen pb-32 px-4 pt-8">
-      <h2 className="text-2xl font-bold mb-6">消息</h2>
-      {isLoading && <div className="text-sm text-slate-400">加载中...</div>}
+      <h2 className="text-2xl font-bold mb-6">{t('messages_title')}</h2>
+      {isLoading && <div className="text-sm text-slate-400">{t('messages_loading')}</div>}
       {!isLoading && items.length === 0 && (
-        <div className="text-sm text-slate-400">暂无消息</div>
+        <div className="text-sm text-slate-400">{t('messages_empty')}</div>
       )}
       <div className="space-y-4">
         {items.map((item) => (
@@ -77,15 +78,15 @@ const Messages: React.FC<Props> = ({ currentUser, onNavigateToTarget }) => {
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-bold text-slate-900">
                 {item.type === 'comment'
-                  ? '你的投稿收到一条新评论'
-                  : '你的评论收到一个新的赞'}
+                  ? t('messages_new_comment')
+                  : t('messages_new_like')}
               </span>
               {!item.read && (
-                <span className="text-[10px] text-orange-600 font-bold">未读</span>
+                <span className="text-[10px] text-orange-600 font-bold">{t('messages_unread')}</span>
               )}
             </div>
             <div className="text-xs text-slate-500">
-              {item.actorName ? `${item.actorName} ` : ''}刚刚发生
+              {item.actorName ? `${item.actorName} ` : ''}{t('messages_just_now')}
             </div>
           </button>
         ))}

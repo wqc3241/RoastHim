@@ -2,6 +2,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AppUser, RoastComment, RoastTarget, UserStats } from '../types';
 import { supabase } from '../supabaseClient';
+import { t } from '../utils/i18n';
+import { getTypeLabel } from '../utils/labels';
 
 interface Props {
   currentUser: AppUser | null;
@@ -174,7 +176,7 @@ const Profile: React.FC<Props> = ({ currentUser, sessionUserId, onNavigateToTarg
   const handleSubmitFeedback = async () => {
     if (!supabase || !currentUser) return;
     if (!feedbackText.trim()) {
-      setFeedbackStatus('请填写反馈内容');
+      setFeedbackStatus(t('profile_feedback_empty'));
       return;
     }
     await supabase.from('feedback').insert([{
@@ -183,19 +185,19 @@ const Profile: React.FC<Props> = ({ currentUser, sessionUserId, onNavigateToTarg
       content: feedbackText.trim()
     }]);
     setFeedbackText('');
-    setFeedbackStatus('感谢反馈！');
+    setFeedbackStatus(t('profile_feedback_thanks'));
     setShowFeedback(false);
   };
 
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center text-slate-500 text-sm gap-3">
-        <span>请先登录查看个人资料</span>
+        <span>{t('profile_need_login')}</span>
         <button
           onClick={() => onRequireLogin?.()}
           className="px-4 py-2 rounded-full bg-orange-500 text-white font-bold text-sm"
         >
-          去登录
+          {t('post_login_cta')}
         </button>
       </div>
     );
@@ -204,7 +206,7 @@ const Profile: React.FC<Props> = ({ currentUser, sessionUserId, onNavigateToTarg
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center text-slate-400 text-sm">
-        加载中...
+        {t('profile_loading')}
       </div>
     );
   }
@@ -220,13 +222,13 @@ const Profile: React.FC<Props> = ({ currentUser, sessionUserId, onNavigateToTarg
               onClick={() => setShowFeedback(true)}
               className="text-xs text-slate-500 border border-slate-200 rounded-full px-3 py-1"
             >
-              提交反馈
+              {t('profile_feedback')}
             </button>
             <button
               onClick={handleSignOut}
               className="text-xs text-slate-400 border border-slate-200 rounded-full px-3 py-1"
             >
-              退出登录
+              {t('profile_logout')}
             </button>
           </div>
         )}
@@ -244,20 +246,20 @@ const Profile: React.FC<Props> = ({ currentUser, sessionUserId, onNavigateToTarg
           </div>
         </div>
         <h2 className="text-2xl font-bold mb-1 text-slate-900">{user.name}</h2>
-        <p className="text-xs text-slate-500 mb-6 font-medium">{user.quote ?? '“键盘在手，天下我有。吐槽不息，战斗不止。”'}</p>
+        <p className="text-xs text-slate-500 mb-6 font-medium">{user.quote ?? `“${t('onboarding_quote_placeholder')}”`}</p>
         
         <div className="grid grid-cols-3 w-full bg-white rounded-2xl p-4 backdrop-blur-md border border-slate-200">
           <div>
             <p className="text-lg font-bold text-orange-600">{stats.targetsCreated}</p>
-            <p className="text-[10px] text-slate-500 font-bold">投稿对象</p>
+            <p className="text-[10px] text-slate-500 font-bold">{t('profile_stats_targets')}</p>
           </div>
           <div className="border-x border-slate-200">
             <p className="text-lg font-bold text-orange-600">{stats.roastsPosted}</p>
-            <p className="text-[10px] text-slate-500 font-bold">发布骂评</p>
+            <p className="text-[10px] text-slate-500 font-bold">{t('profile_stats_roasts')}</p>
           </div>
           <div>
             <p className="text-lg font-bold text-orange-600">{likesLabel}</p>
-            <p className="text-[10px] text-slate-500 font-bold">获赞总数</p>
+            <p className="text-[10px] text-slate-500 font-bold">{t('profile_stats_likes')}</p>
           </div>
         </div>
       </div>
@@ -273,9 +275,9 @@ const Profile: React.FC<Props> = ({ currentUser, sessionUserId, onNavigateToTarg
                 activeTab === tab ? 'text-slate-900' : 'text-slate-400'
               }`}
             >
-              {tab === 'roasts' && '我的骂'}
-              {tab === 'targets' && '我的投稿'}
-              {tab === 'badges' && '我的徽章'}
+              {tab === 'roasts' && t('profile_tab_roasts')}
+              {tab === 'targets' && t('profile_tab_targets')}
+              {tab === 'badges' && t('profile_tab_badges')}
               {activeTab === tab && <div className="absolute bottom-0 left-0 right-0 h-1 bg-orange-500 rounded-full" />}
             </button>
           ))}
@@ -297,10 +299,10 @@ const Profile: React.FC<Props> = ({ currentUser, sessionUserId, onNavigateToTarg
           {activeTab === 'roasts' && (
             <div className="space-y-4">
               {isLoading && (
-                <div className="text-sm text-slate-400">加载中...</div>
+                <div className="text-sm text-slate-400">{t('profile_loading')}</div>
               )}
               {myRoasts.length === 0 && !isLoading && (
-                <div className="text-xs text-slate-400">暂无骂评记录</div>
+                <div className="text-xs text-slate-400">{t('profile_roasts_empty')}</div>
               )}
               {myRoasts.map((roast) => {
                 const target = targetMap[roast.targetId];
@@ -313,14 +315,14 @@ const Profile: React.FC<Props> = ({ currentUser, sessionUserId, onNavigateToTarg
                   >
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-[10px] font-bold text-orange-600">
-                      骂评 · {target ? target.name : '查看原帖'}
+                      {target ? t('profile_roast_item', { name: target.name }) : t('profile_roast_item_fallback')}
                     </span>
-                    <span className="text-[8px] text-slate-400">{roast.timestamp ?? '刚刚'}</span>
+                    <span className="text-[8px] text-slate-400">{roast.timestamp ?? t('messages_just_now')}</span>
                   </div>
                   <p className="text-xs text-slate-600 line-clamp-2">{roast.content}</p>
                   <div className="flex gap-4 mt-3">
-                    <span className="text-[10px] text-slate-400">👍 {roast.likes}</span>
-                    <span className="text-[10px] text-slate-400">💬 0</span>
+                    <span className="text-[10px] text-slate-400">{t('profile_roast_likes', { count: roast.likes })}</span>
+                    <span className="text-[10px] text-slate-400">{t('profile_roast_replies', { count: 0 })}</span>
                   </div>
                   </button>
                 );
@@ -331,13 +333,13 @@ const Profile: React.FC<Props> = ({ currentUser, sessionUserId, onNavigateToTarg
           {activeTab === 'targets' && (
             <div className="space-y-4">
               {isLoading && (
-                <div className="text-sm text-slate-400">加载中...</div>
+                <div className="text-sm text-slate-400">{t('profile_loading')}</div>
               )}
               {myTargets.length === 0 && !isLoading && (
                 <div className="flex flex-col items-center justify-center py-10 opacity-50">
                   <span className="text-4xl mb-4">📭</span>
-                  <p className="text-xs">还没有被骂对象入库哦~</p>
-                  <button className="mt-4 text-orange-600 text-sm font-bold">去投稿一个？</button>
+                  <p className="text-xs">{t('profile_targets_empty')}</p>
+                  <button className="mt-4 text-orange-600 text-sm font-bold">{t('profile_targets_cta')}</button>
                 </div>
               )}
               {myTargets.map((target) => (
@@ -348,8 +350,8 @@ const Profile: React.FC<Props> = ({ currentUser, sessionUserId, onNavigateToTarg
                   className="w-full text-left bg-white p-4 rounded-2xl border border-slate-200 transition-transform active:scale-[0.99]"
                 >
                   <div className="flex justify-between items-center mb-2">
-                    <span className="text-[10px] font-bold text-orange-600">{target.type}</span>
-                    <span className="text-[8px] text-slate-400">{target.roastCount} 次被骂</span>
+                    <span className="text-[10px] font-bold text-orange-600">{getTypeLabel(target.type)}</span>
+                    <span className="text-[8px] text-slate-400">{t('profile_target_roasts', { count: target.roastCount })}</span>
                   </div>
                   <p className="text-xs text-slate-600 font-bold">{target.name}</p>
                   <p className="text-[10px] text-slate-500 line-clamp-2 mt-1">{target.description}</p>
@@ -363,10 +365,10 @@ const Profile: React.FC<Props> = ({ currentUser, sessionUserId, onNavigateToTarg
     {showFeedback && (
       <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center px-6">
         <div className="w-full max-w-sm bg-white rounded-2xl p-5">
-          <div className="text-sm font-bold mb-3">提交反馈</div>
+          <div className="text-sm font-bold mb-3">{t('profile_feedback_title')}</div>
           <textarea
             rows={4}
-            placeholder="写下你的想法或建议..."
+            placeholder={t('profile_feedback_placeholder')}
             className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-orange-500"
             value={feedbackText}
             onChange={(e) => setFeedbackText(e.target.value)}
@@ -379,13 +381,13 @@ const Profile: React.FC<Props> = ({ currentUser, sessionUserId, onNavigateToTarg
               onClick={() => setShowFeedback(false)}
               className="text-xs text-slate-500 border border-slate-200 rounded-full px-3 py-1"
             >
-              取消
+              {t('details_reply_cancel')}
             </button>
             <button
               onClick={handleSubmitFeedback}
               className="text-xs text-white bg-orange-500 rounded-full px-3 py-1"
             >
-              提交
+              {t('details_send')}
             </button>
           </div>
         </div>
