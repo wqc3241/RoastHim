@@ -114,6 +114,14 @@ create table if not exists notifications (
   "read" boolean default false
 );
 
+create table if not exists feedback (
+  id uuid primary key default gen_random_uuid(),
+  "userId" text,
+  "userName" text,
+  content text not null,
+  "createdAt" timestamptz default now()
+);
+
 -- Enable RLS for all tables
 alter table app_users enable row level security;
 alter table user_stats enable row level security;
@@ -125,6 +133,7 @@ alter table leaderboard_daily enable row level security;
 alter table leaderboard_top enable row level security;
 alter table leaderboard_hof enable row level security;
 alter table notifications enable row level security;
+alter table feedback enable row level security;
 
 -- Minimal RLS policies
 drop policy if exists "app_users_select_own" on app_users;
@@ -200,6 +209,10 @@ create policy "notifications_insert_auth" on notifications
   for insert with check (auth.uid() is not null);
 create policy "notifications_update_own" on notifications
   for update using (auth.uid()::text = "userId");
+
+drop policy if exists "feedback_insert_auth" on feedback;
+create policy "feedback_insert_auth" on feedback
+  for insert with check (auth.uid() is not null);
 
 -- Progress helpers
 create or replace function level_from_exp(p_exp int)

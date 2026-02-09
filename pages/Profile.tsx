@@ -25,6 +25,9 @@ const Profile: React.FC<Props> = ({ currentUser, sessionUserId, onNavigateToTarg
   const [myTargets, setMyTargets] = useState<RoastTarget[]>([]);
   const [targetMap, setTargetMap] = useState<Record<string, RoastTarget>>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackStatus, setFeedbackStatus] = useState<string | null>(null);
 
   const likesLabel = useMemo(() => {
     if (!stats) return '0';
@@ -168,6 +171,22 @@ const Profile: React.FC<Props> = ({ currentUser, sessionUserId, onNavigateToTarg
     await supabase.auth.signOut();
   };
 
+  const handleSubmitFeedback = async () => {
+    if (!supabase || !currentUser) return;
+    if (!feedbackText.trim()) {
+      setFeedbackStatus('请填写反馈内容');
+      return;
+    }
+    await supabase.from('feedback').insert([{
+      userId: currentUser.id,
+      userName: currentUser.name,
+      content: feedbackText.trim()
+    }]);
+    setFeedbackText('');
+    setFeedbackStatus('感谢反馈！');
+    setShowFeedback(false);
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center text-slate-500 text-sm gap-3">
@@ -191,16 +210,25 @@ const Profile: React.FC<Props> = ({ currentUser, sessionUserId, onNavigateToTarg
   }
 
   return (
+    <>
     <div className="min-h-screen pb-32">
       {/* Header Info */}
       <div className="bg-gradient-to-b from-orange-200/40 to-transparent px-6 pt-16 pb-10 flex flex-col items-center text-center">
         {supabase && (
-          <button
-            onClick={handleSignOut}
-            className="self-end text-xs text-slate-400 border border-slate-200 rounded-full px-3 py-1 mb-4"
-          >
-            退出登录
-          </button>
+          <div className="self-end flex gap-2 mb-4">
+            <button
+              onClick={() => setShowFeedback(true)}
+              className="text-xs text-slate-500 border border-slate-200 rounded-full px-3 py-1"
+            >
+              提交反馈
+            </button>
+            <button
+              onClick={handleSignOut}
+              className="text-xs text-slate-400 border border-slate-200 rounded-full px-3 py-1"
+            >
+              退出登录
+            </button>
+          </div>
         )}
         <div className="relative mb-4">
           <div
@@ -332,6 +360,38 @@ const Profile: React.FC<Props> = ({ currentUser, sessionUserId, onNavigateToTarg
         </div>
       </div>
     </div>
+    {showFeedback && (
+      <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center px-6">
+        <div className="w-full max-w-sm bg-white rounded-2xl p-5">
+          <div className="text-sm font-bold mb-3">提交反馈</div>
+          <textarea
+            rows={4}
+            placeholder="写下你的想法或建议..."
+            className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-orange-500"
+            value={feedbackText}
+            onChange={(e) => setFeedbackText(e.target.value)}
+          />
+          {feedbackStatus && (
+            <div className="text-xs text-slate-500 mt-2">{feedbackStatus}</div>
+          )}
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              onClick={() => setShowFeedback(false)}
+              className="text-xs text-slate-500 border border-slate-200 rounded-full px-3 py-1"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleSubmitFeedback}
+              className="text-xs text-white bg-orange-500 rounded-full px-3 py-1"
+            >
+              提交
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 
