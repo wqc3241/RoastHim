@@ -23,6 +23,11 @@ const Home: React.FC<Props> = ({ onSelectTarget, isAuthenticated = false, isDesk
   const [page, setPage] = useState(0);
   const loaderRef = useRef<HTMLDivElement | null>(null);
   const isFetchingRef = useRef(false);
+  const activeTabRef = useRef<'hot' | 'new' | 'champ'>(activeTab);
+
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
 
   const sortedTargets = useMemo(() => {
     const items = [...targets];
@@ -42,6 +47,7 @@ const Home: React.FC<Props> = ({ onSelectTarget, isAuthenticated = false, isDesk
   const loadTargets = useCallback(async (pageIndex: number, append: boolean) => {
     if (!supabase) return;
     if (isFetchingRef.current) return;
+    const tabAtRequest = activeTab;
     isFetchingRef.current = true;
     if (pageIndex === 0) {
       setIsLoading(true);
@@ -51,13 +57,25 @@ const Home: React.FC<Props> = ({ onSelectTarget, isAuthenticated = false, isDesk
 
     const rangeStart = pageIndex * PAGE_SIZE;
     const rangeEnd = rangeStart + PAGE_SIZE - 1;
+    const orderColumn =
+      activeTab === 'new'
+        ? 'createdAt'
+        : activeTab === 'champ'
+          ? 'totalLikes'
+          : 'heatIndex';
     const { data, error } = await supabase
       .from('roast_targets')
       .select('*')
-      .order('heatIndex', { ascending: false })
+      .order(orderColumn, { ascending: false })
       .range(rangeStart, rangeEnd);
 
     if (error || !data || data.length === 0) {
+      if (tabAtRequest !== activeTabRef.current) {
+        setIsLoading(false);
+        setIsLoadingMore(false);
+        isFetchingRef.current = false;
+        return;
+      }
       if (pageIndex === 0) {
         setTargets([]);
       }
@@ -107,18 +125,33 @@ const Home: React.FC<Props> = ({ onSelectTarget, isAuthenticated = false, isDesk
       })
     );
 
-    setTargets((prev) => (append ? [...prev, ...enriched] : enriched));
+    if (tabAtRequest !== activeTabRef.current) {
+      setIsLoading(false);
+      setIsLoadingMore(false);
+      isFetchingRef.current = false;
+      return;
+    }
+
+    setTargets((prev) => {
+      const merged = append ? [...prev, ...enriched] : enriched;
+      const deduped = new Map<string, RoastTarget>();
+      merged.forEach((item) => {
+        deduped.set(item.id, item);
+      });
+      return Array.from(deduped.values());
+    });
     setPage(pageIndex);
     setHasMore(data.length >= PAGE_SIZE);
     setIsLoading(false);
     setIsLoadingMore(false);
     isFetchingRef.current = false;
-  }, []);
+  }, [activeTab]);
 
   useEffect(() => {
     setTargets([]);
     setHasMore(true);
     setPage(0);
+    isFetchingRef.current = false;
     loadTargets(0, false);
   }, [loadTargets]);
 
