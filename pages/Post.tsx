@@ -130,12 +130,6 @@ const Post: React.FC<Props> = ({ onSuccess, currentUser, isAuthenticated, onRequ
       setTextError(t('post_profanity_experience'));
       return;
     }
-    const geminiKey = (process as any).env?.GEMINI_API_KEY || (process as any).env?.API_KEY;
-    if (!geminiKey) {
-      setAiError(t('post_missing_gemini'));
-      return;
-    }
-
     setIsGenerating(true);
     setAiError(null);
     setTextError(null);
@@ -160,26 +154,28 @@ Constraints:
 User description: ${experienceText}`;
 
     try {
-      const model = 'gemini-3-flash-preview';
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      const res = await fetch('/api/ai/generate-target', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': geminiKey
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.4 }
-        })
+        body: JSON.stringify({ prompt })
       });
 
       if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(errText || `HTTP ${res.status}`);
+        let errMessage = `HTTP ${res.status}`;
+        try {
+          const errJson = await res.json();
+          errMessage = errJson?.error || errMessage;
+        } catch {
+          const errText = await res.text();
+          if (errText) errMessage = errText;
+        }
+        throw new Error(errMessage);
       }
 
       const data = await res.json();
-      const text = data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text).join('') ?? '';
+      const text = data?.text ?? '';
       const jsonText = text.match(/\{[\s\S]*\}/)?.[0];
       if (!jsonText) {
         throw new Error(t('post_parse_failed'));
