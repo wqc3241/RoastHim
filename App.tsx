@@ -15,6 +15,12 @@ import { Analytics } from '@vercel/analytics/react';
 import Messages from './pages/Messages';
 import { t } from './utils/i18n';
 
+type AppHistoryState = {
+  __roastHimApp: true;
+  page: Page;
+  target: RoastTarget | null;
+};
+
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>(Page.HOME);
   const [selectedTarget, setSelectedTarget] = useState<RoastTarget | null>(null);
@@ -85,6 +91,59 @@ const App: React.FC = () => {
     }
     mediaQuery.addListener(handleChange);
     return () => mediaQuery.removeListener(handleChange);
+  }, []);
+
+  const toHistoryState = (page: Page, target: RoastTarget | null): AppHistoryState => ({
+    __roastHimApp: true,
+    page,
+    target
+  });
+
+  const readHistoryState = (state: any): AppHistoryState | null => {
+    if (!state || state.__roastHimApp !== true) return null;
+    return state as AppHistoryState;
+  };
+
+  const navigate = (
+    page: Page,
+    options?: {
+      target?: RoastTarget | null;
+      replace?: boolean;
+    }
+  ) => {
+    const nextTarget = options?.target ?? null;
+    const shouldReplace = options?.replace ?? false;
+    const isSameTarget = selectedTarget?.id === nextTarget?.id;
+    const isSameState = currentPage === page && isSameTarget;
+
+    setCurrentPage(page);
+    setSelectedTarget(nextTarget);
+
+    if (typeof window === 'undefined') return;
+    if (shouldReplace || isSameState) {
+      window.history.replaceState(toHistoryState(page, nextTarget), '');
+      return;
+    }
+    window.history.pushState(toHistoryState(page, nextTarget), '');
+  };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const existingState = readHistoryState(window.history.state);
+    if (!existingState) {
+      window.history.replaceState(toHistoryState(currentPage, selectedTarget), '');
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+      const state = readHistoryState(event.state);
+      if (!state) return;
+      setCurrentPage(state.page);
+      setSelectedTarget(state.target ?? null);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   const loadProfile = async (user?: { id: string; email?: string | null; user_metadata?: any }) => {
@@ -177,8 +236,11 @@ const App: React.FC = () => {
   };
 
   const navigateToDetails = (target: RoastTarget) => {
-    setSelectedTarget(target);
-    setCurrentPage(Page.DETAILS);
+    navigate(Page.DETAILS, { target });
+  };
+
+  const handlePageChange = (page: Page) => {
+    navigate(page, { target: null });
   };
 
   const renderPage = () => {
@@ -195,7 +257,7 @@ const App: React.FC = () => {
         return selectedTarget ? (
           <Details
             target={selectedTarget}
-            onBack={() => setCurrentPage(Page.HOME)}
+            onBack={() => handlePageChange(Page.HOME)}
             currentUser={currentUser}
             isAuthenticated={!!sessionUserId}
             onRequireLogin={() => setShowLogin(true)}
@@ -210,7 +272,7 @@ const App: React.FC = () => {
       case Page.POST:
         return (
           <Post
-            onSuccess={() => setCurrentPage(Page.HOME)}
+            onSuccess={() => handlePageChange(Page.HOME)}
             currentUser={currentUser}
             isAuthenticated={!!sessionUserId}
             onRequireLogin={() => setShowLogin(true)}
@@ -249,7 +311,7 @@ const App: React.FC = () => {
           {isDesktop && isAuthReady && !needsOnboarding && (
             <NavBar
               currentPage={currentPage}
-              onPageChange={setCurrentPage}
+              onPageChange={handlePageChange}
               isAuthenticated={!!sessionUserId}
               onRequireLogin={() => setShowLogin(true)}
               variant="desktop"
@@ -295,7 +357,7 @@ const App: React.FC = () => {
             {!isDesktop && currentPage !== Page.DETAILS && isAuthReady && !needsOnboarding && (
               <NavBar
                 currentPage={currentPage}
-                onPageChange={setCurrentPage}
+                onPageChange={handlePageChange}
                 isAuthenticated={!!sessionUserId}
                 onRequireLogin={() => setShowLogin(true)}
               />
